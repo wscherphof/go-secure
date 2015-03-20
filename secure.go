@@ -30,14 +30,14 @@ var config = Config {
   TimeOut: 15 * 60 * time.Second, 
 }
 
-func Init (fetch func () Config) {
+func Init (fetch func () *Config) {
   go func () {
     for {
       // TODO:
       // - use the new key for new sessions
       // - keep the old key to try if old sessions fail on the new key
       // - ditch the old key on the next update; no more than 2 key alternatives
-      config = fetch()
+      config = *fetch()
       log.Print("INFO: fetched Secure config")
       time.Sleep(config.TimeOut)
     }
