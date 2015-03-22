@@ -19,6 +19,7 @@ var (
   codecs []securecookie.Codec
 )
 
+// TODO: catch errors
 type DB interface {
   Fetch () *Config
   Update (*Config)
@@ -96,6 +97,7 @@ func update (w http.ResponseWriter, uid string) {
   LogIn(w, uid)
 }
 
+// TODO: possible to add message with reason for redirect?
 func redirect (w http.ResponseWriter, r *http.Request) string {
   http.Redirect(w, r, config.RedirectPath + "?return=" + r.URL.Path, 302)
   return ""
