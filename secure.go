@@ -51,13 +51,13 @@ func Init (db DB) {
   }()
 }
 
-type Session struct {
+type sessiontype struct {
   UID string
   Time time.Time
 }
 
 func LogIn (w http.ResponseWriter, uid string) {
-  session := Session{
+  session := sessiontype {
     uid,
     time.Now(),
   }
@@ -77,7 +77,7 @@ func Authenticate (w http.ResponseWriter, r *http.Request) string {
   if err != nil {
     return redirect(w, r)
   }
-  var session Session
+  var session sessiontype
   err = securecookie.DecodeMulti("Token", cookie.Value, &session, codecs...)
   if err != nil {
     return redirect(w, r)
