@@ -26,7 +26,7 @@ type DB interface {
 
 func Init (db DB) {
   config = &Config {
-    KeyPairs: [][]byte{securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)},
+    KeyPairs: [][]byte{securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)},
     TimeStamp: time.Now(),
     RedirectPath: "/login",
     TimeOut: 15 * 60 * time.Second, 
