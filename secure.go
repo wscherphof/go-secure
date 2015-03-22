@@ -7,38 +7,45 @@ import (
   "github.com/gorilla/securecookie"
 )
 
-type Secret struct {
-  Key string
-  Time time.Time
-}
-
 type Config struct {
-  Secret Secret
+  KeyPairs [][]byte
+  TimeStamp time.Time
   RedirectPath string
   TimeOut time.Duration
 }
 
-var config = Config {
-  Secret: Secret {
-    Key: "qwerty",
-    Time: time.Now(),
-  },
-  RedirectPath: "/login",
-  TimeOut: 15 * 60 * time.Second, 
+var (
+  config *Config
+  codecs []securecookie.Codec
+)
+
+type DB interface {
+  Fetch () *Config
+  Update (*Config)
 }
 
-var sc *securecookie.SecureCookie
-
-func Init (fetch func () *Config) {
+func Init (db DB) {
+  config = &Config {
+    KeyPairs: [][]byte{securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)},
+    TimeStamp: time.Now(),
+    RedirectPath: "/login",
+    TimeOut: 15 * 60 * time.Second, 
+  }
+  if db == nil {
+    return
+  }
   go func () {
     for {
-      // TODO:
-      // - use the new key for new sessions
-      // - keep the old key to try if old sessions fail on the new key
-      // - ditch the old key on the next update; no more than 2 key alternatives
-      config = *fetch()
-      sc = securecookie.New([]byte(config.Secret.Key), nil)
-      log.Print("INFO: fetched Secure config")
+      config = db.Fetch()
+      if time.Now().Sub(config.TimeStamp) >= config.TimeOut {
+        config.KeyPairs[2], config.KeyPairs[3] = config.KeyPairs[0], config.KeyPairs[1]
+        config.KeyPairs[0], config.KeyPairs[1] = securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)
+        config.TimeStamp = time.Now()
+        db.Update(config)
+        // TODO: consider what to log
+        log.Print("INFO: updated Secure config")
+      }
+      codecs = securecookie.CodecsFromPairs(config.KeyPairs...)
       time.Sleep(config.TimeOut)
     }
   }()
@@ -50,10 +57,11 @@ type Session struct {
 }
 
 func LogIn (w http.ResponseWriter, uid string) {
-  encoded, err := sc.Encode("Token", Session{
+  session := Session{
     uid,
     time.Now(),
-  })
+  }
+  encoded, err := securecookie.EncodeMulti("Token", session, codecs...)
   if err != nil {
     panic(err)
   }
@@ -64,25 +72,31 @@ func LogIn (w http.ResponseWriter, uid string) {
   })
 }
 
-func Update (w http.ResponseWriter, uid string) {
+func Authenticate (w http.ResponseWriter, r *http.Request) string {
+  cookie, err := r.Cookie("Token")
+  if err != nil {
+    return redirect(w, r)
+  }
+  var session Session
+  err = securecookie.DecodeMulti("Token", cookie.Value, &session, codecs...)
+  if err != nil {
+    return redirect(w, r)
+  }
+  // Verify session time out
+  if time.Since(session.Time) > config.TimeOut {
+    return redirect(w, r)
+  } else {
+    // Update the Token cookie to include the current time
+    update(w, session.UID)
+    return session.UID
+  }
+}
+
+func update (w http.ResponseWriter, uid string) {
   LogIn(w, uid)
 }
 
-func Authenticate (w http.ResponseWriter, r *http.Request) string {
-  if cookie, err := r.Cookie("Token"); err == nil {
-    var session Session
-    err = sc.Decode("Token", cookie.Value, &session)
-    if err != nil {
-      panic(err)
-    }
-    // Verify the session hasn't timed out
-    since := time.Since(session.Time)
-    if since < config.TimeOut {
-      // Update the Token cookie to include the current time
-      Update(w, session.UID)
-      return session.UID
-    }
-  }
+func redirect (w http.ResponseWriter, r *http.Request) string {
   http.Redirect(w, r, config.RedirectPath + "?return=" + r.URL.Path, 302)
   return ""
 }
