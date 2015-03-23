@@ -14,15 +14,15 @@ type Config struct {
   TimeOut time.Duration
 }
 
-var (
-  config *Config
-  codecs []securecookie.Codec
-)
-
 type DB interface {
   Fetch () *Config
   Upsert (*Config)
 }
+
+var (
+  config *Config
+  codecs []securecookie.Codec
+)
 
 func Init (db DB, optionalConfig ...*Config) {
   // Build default config, based on possible given config
