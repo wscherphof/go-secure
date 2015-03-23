@@ -25,7 +25,7 @@ type DB interface {
 }
 
 func Init (db DB, optionalConfig ...*Config) {
-  // Build default config, based on possible given coinfig
+  // Build default config, based on possible given config
   config = &Config {}
   if len(optionalConfig) > 0 {
     config = optionalConfig[0]
