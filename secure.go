@@ -25,6 +25,7 @@ type DB interface {
 }
 
 func Init (db DB, optionalConfig ...*Config) {
+  // Build default config, based on possible given coinfig
   config = &Config {}
   if len(optionalConfig) > 0 {
     config = optionalConfig[0]
@@ -47,9 +48,12 @@ func Init (db DB, optionalConfig ...*Config) {
   go func () {
     for {
       if dbConfig := db.Fetch(); dbConfig == nil {
+        // Upload default config to DB if there wasn't any
         db.Upsert(config)
       } else {
+        // Replace default config with the one from DB
         config = dbConfig
+        // Rotate keys if passed time out
         if time.Now().Sub(config.TimeStamp) >= config.TimeOut {
           config.KeyPairs[2], config.KeyPairs[3] = config.KeyPairs[0], config.KeyPairs[1]
           config.KeyPairs[0], config.KeyPairs[1] = securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)
@@ -65,6 +69,7 @@ func Init (db DB, optionalConfig ...*Config) {
   }()
 }
 
+// TODO: make session data flexible
 type sessiontype struct {
   UID string
   Time time.Time
