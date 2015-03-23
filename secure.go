@@ -90,6 +90,7 @@ func LogIn (w http.ResponseWriter, uid string) {
         Path:  "/",
     })
   } else {
+    // TODO: don't panic
     panic(err)
   }
 }
