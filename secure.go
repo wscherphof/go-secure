@@ -19,34 +19,47 @@ var (
   codecs []securecookie.Codec
 )
 
-// TODO: catch errors
 type DB interface {
   Fetch () *Config
-  Update (*Config)
+  Upsert (*Config)
 }
 
-func Init (db DB) {
-  config = &Config {
-    KeyPairs: [][]byte{securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)},
-    TimeStamp: time.Now(),
-    RedirectPath: "/login",
-    TimeOut: 15 * 60 * time.Second, 
+func Init (db DB, optionalConfig ...*Config) {
+  config = &Config {}
+  if len(optionalConfig) > 0 {
+    config = optionalConfig[0]
   }
+  config.TimeStamp = time.Now()
+  if len(config.KeyPairs) != 4 {
+    config.KeyPairs = [][]byte{securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)}
+    config.TimeStamp = time.Now()
+  }
+  if config.RedirectPath == "" {
+    config.RedirectPath = "/login"
+  }
+  if config.TimeOut == 0 {
+    config.TimeOut = 15 * 60 * time.Second
+  }
+  codecs = securecookie.CodecsFromPairs(config.KeyPairs...)
   if db == nil {
     return
   }
   go func () {
     for {
-      config = db.Fetch()
-      if time.Now().Sub(config.TimeStamp) >= config.TimeOut {
-        config.KeyPairs[2], config.KeyPairs[3] = config.KeyPairs[0], config.KeyPairs[1]
-        config.KeyPairs[0], config.KeyPairs[1] = securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)
-        config.TimeStamp = time.Now()
-        db.Update(config)
-        // TODO: consider what to log
-        log.Print("INFO: updated Secure config")
+      if dbConfig := db.Fetch(); dbConfig == nil {
+        db.Upsert(config)
+      } else {
+        config = dbConfig
+        if time.Now().Sub(config.TimeStamp) >= config.TimeOut {
+          config.KeyPairs[2], config.KeyPairs[3] = config.KeyPairs[0], config.KeyPairs[1]
+          config.KeyPairs[0], config.KeyPairs[1] = securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)
+          config.TimeStamp = time.Now()
+          db.Upsert(config)
+          // TODO: consider what to log
+          log.Print("INFO: Security keys rotated")
+        }
+        codecs = securecookie.CodecsFromPairs(config.KeyPairs...)
       }
-      codecs = securecookie.CodecsFromPairs(config.KeyPairs...)
       time.Sleep(config.TimeOut)
     }
   }()
@@ -62,26 +75,25 @@ func LogIn (w http.ResponseWriter, uid string) {
     uid,
     time.Now(),
   }
-  encoded, err := securecookie.EncodeMulti("Token", session, codecs...)
-  if err != nil {
+  if encoded, err := securecookie.EncodeMulti("Token", session, codecs...); err == nil {
+    http.SetCookie(w, &http.Cookie{
+        Name:  "Token",
+        Value: encoded,
+        Path:  "/",
+    })
+  } else {
     panic(err)
   }
-  http.SetCookie(w, &http.Cookie{
-      Name:  "Token",
-      Value: encoded,
-      Path:  "/",
-  })
 }
 
 func Authenticate (w http.ResponseWriter, r *http.Request) string {
-  cookie, err := r.Cookie("Token")
-  if err != nil {
-    return redirect(w, r)
-  }
   var session sessiontype
-  err = securecookie.DecodeMulti("Token", cookie.Value, &session, codecs...)
-  if err != nil {
+  if cookie, err := r.Cookie("Token"); err != nil {
     return redirect(w, r)
+  } else {
+    if err := securecookie.DecodeMulti("Token", cookie.Value, &session, codecs...); err != nil {
+      return redirect(w, r)
+    }
   }
   // Verify session time out
   if time.Since(session.Time) > config.TimeOut {
