@@ -41,6 +41,7 @@ func Init (db DB, optionalConfig ...*Config) {
   if config.TimeOut == 0 {
     config.TimeOut = 15 * 60 * time.Second
   }
+  // Create codecs from default config
   codecs = securecookie.CodecsFromPairs(config.KeyPairs...)
   if db == nil {
     return
@@ -62,6 +63,8 @@ func Init (db DB, optionalConfig ...*Config) {
           // TODO: consider what to log
           log.Print("INFO: Security keys rotated")
         }
+        // Update codecs from new config
+        // (If we didn't rotate the keys in DB, a collaborator process most probably did do so)
         codecs = securecookie.CodecsFromPairs(config.KeyPairs...)
       }
       time.Sleep(config.TimeOut)
