@@ -12,7 +12,8 @@ import (
 type Config struct {
   KeyPairs [][]byte
   TimeStamp time.Time
-  RedirectPath string
+  LogInPath string
+  LogOutPath string
   TimeOut time.Duration
 }
 
@@ -47,8 +48,11 @@ func Init (db DB, optionalConfig ...*Config) {
       securecookie.GenerateRandomKey(LEN_KEY_ENCR),
     }
   }
-  if config.RedirectPath == "" {
-    config.RedirectPath = "/login"
+  if config.LogInPath == "" {
+    config.LogInPath = "/login"
+  }
+  if config.LogOutPath == "" {
+    config.LogOutPath = "/logout"
   }
   if config.TimeOut == 0 {
     config.TimeOut = 15 * 60 * time.Second
@@ -77,7 +81,7 @@ func sync (db DB) {
     // Replace current config with the one from DB
     config = dbConfig
     // Rotate keys if passed time out
-    if time.Now().Sub(config.TimeStamp) >= config.TimeOut {
+    if time.Now().Sub(config.TimeStamp) > config.TimeOut {
       config.KeyPairs = [][]byte{
         securecookie.GenerateRandomKey(LEN_KEY_AUTH),
         securecookie.GenerateRandomKey(LEN_KEY_ENCR),
@@ -99,37 +103,32 @@ func sync (db DB) {
 func LogIn (w http.ResponseWriter, r *http.Request, uid string) {
   session, _ := store.Get(r, "Token")
   session.Values["uid"] = uid
-  save(w, r)
-}
-
-func save (w http.ResponseWriter, r *http.Request) {
-  session, _ := store.Get(r, "Token")
-  session.Values["time"] = time.Now()
+  session.Values["authenticated"] = time.Now()
+  var path = "/"
+  if flashes := session.Flashes("return"); len(flashes) > 0 {
+    path = flashes[0].(string)
+  }
   if err := session.Save(r, w); err != nil {
     // TODO: don't panic
     panic(err)
   }
+  http.Redirect(w, r, path, http.StatusSeeOther)
 }
 
 func Authenticate (w http.ResponseWriter, r *http.Request) string {
+  authenticated, ret := false, ""
   session, _ := store.Get(r, "Token")
-  if session.IsNew {
-    return redirect(w, r)
-  }
-  // Verify session time out
-  if time.Since(session.Values["time"].(time.Time)) > config.TimeOut {
-    return redirect(w, r)
+  if session.IsNew || session.Values["authenticated"] == nil || time.Since(session.Values["authenticated"].(time.Time)) > config.TimeOut {
+    session.AddFlash(r.URL.Path, "return")
   } else {
-    // Update the Token cookie to include the current time
-    save(w, r)
-    return session.Values["uid"].(string)
+    session.Values["authenticated"] = time.Now()
+    authenticated, ret = true, session.Values["uid"].(string)
   }
-}
-
-// TODO: possible to add message with reason for redirect?
-func redirect (w http.ResponseWriter, r *http.Request) string {
-  http.Redirect(w, r, config.RedirectPath + "?return=" + r.URL.Path, 302)
-  return ""
+  _ = session.Save(r, w)
+  if !(authenticated) {
+    http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
+  }
+  return ret
 }
 
 func LogOut (w http.ResponseWriter, r *http.Request) {
@@ -137,5 +136,6 @@ func LogOut (w http.ResponseWriter, r *http.Request) {
   session.Options = &sessions.Options{
     MaxAge: -1,
   }
-  save(w, r)
+  _ = session.Save(r, w)
+  http.Redirect(w, r, config.LogOutPath, http.StatusSeeOther)
 }
