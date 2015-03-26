@@ -52,7 +52,7 @@ func Init (db DB, optionalConfig ...*Config) {
     config.LogInPath = "/login"
   }
   if config.LogOutPath == "" {
-    config.LogOutPath = "/logout"
+    config.LogOutPath = "/"
   }
   if config.TimeOut == 0 {
     config.TimeOut = 15 * 60 * time.Second
