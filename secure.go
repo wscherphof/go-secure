@@ -4,6 +4,8 @@ import (
   "time"
   "net/http"
   "log"
+  "encoding/gob"
+  "github.com/gorilla/sessions"
   "github.com/gorilla/securecookie"
 )
 
@@ -21,10 +23,16 @@ type DB interface {
 
 var (
   config *Config
-  codecs []securecookie.Codec
+  store *sessions.CookieStore
+)
+
+const (
+  LEN_KEY_AUTH = 32
+  LEN_KEY_ENCR = 32
 )
 
 func Init (db DB, optionalConfig ...*Config) {
+  gob.Register(time.Now())
   // Build default config, based on possible given config
   config = &Config {}
   if len(optionalConfig) > 0 {
@@ -32,8 +40,12 @@ func Init (db DB, optionalConfig ...*Config) {
   }
   config.TimeStamp = time.Now()
   if len(config.KeyPairs) != 4 {
-    config.KeyPairs = [][]byte{securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)}
-    config.TimeStamp = time.Now()
+    config.KeyPairs = [][]byte{
+      securecookie.GenerateRandomKey(LEN_KEY_AUTH),
+      securecookie.GenerateRandomKey(LEN_KEY_ENCR),
+      securecookie.GenerateRandomKey(LEN_KEY_AUTH),
+      securecookie.GenerateRandomKey(LEN_KEY_ENCR),
+    }
   }
   if config.RedirectPath == "" {
     config.RedirectPath = "/login"
@@ -41,85 +53,89 @@ func Init (db DB, optionalConfig ...*Config) {
   if config.TimeOut == 0 {
     config.TimeOut = 15 * 60 * time.Second
   }
-  // Create codecs from default config
-  codecs = securecookie.CodecsFromPairs(config.KeyPairs...)
-  if db == nil {
-    return
-  }
-  go func () {
-    for {
-      if dbConfig := db.Fetch(); dbConfig == nil {
-        // Upload default config to DB if there wasn't any
-        db.Upsert(config)
-      } else {
-        // Replace default config with the one from DB
-        config = dbConfig
-        // Rotate keys if passed time out
-        if time.Now().Sub(config.TimeStamp) >= config.TimeOut {
-          config.KeyPairs[2], config.KeyPairs[3] = config.KeyPairs[0], config.KeyPairs[1]
-          config.KeyPairs[0], config.KeyPairs[1] = securecookie.GenerateRandomKey(16), securecookie.GenerateRandomKey(16)
-          config.TimeStamp = time.Now()
-          db.Upsert(config)
-          // TODO: consider what to log
-          log.Print("INFO: Security keys rotated")
-        }
-        // Update codecs from new config
-        // (If we didn't rotate the keys in DB, a collaborator process most probably did do so)
-        codecs = securecookie.CodecsFromPairs(config.KeyPairs...)
+  // Use keys from default config
+  updateKeys()
+  if db != nil {
+    go func () {
+      for {
+        sync(db)
+        time.Sleep(config.TimeOut)
       }
-      time.Sleep(config.TimeOut)
-    }
-  }()
-}
-
-// TODO: make session data flexible
-type sessiontype struct {
-  UID string
-  Time time.Time
-}
-
-func LogIn (w http.ResponseWriter, uid string) {
-  session := sessiontype {
-    uid,
-    time.Now(),
+    }()
   }
-  if encoded, err := securecookie.EncodeMulti("Token", session, codecs...); err == nil {
-    http.SetCookie(w, &http.Cookie{
-        Name:  "Token",
-        Value: encoded,
-        Path:  "/",
-    })
+}
+
+func updateKeys () {
+  store = sessions.NewCookieStore(config.KeyPairs...)
+}
+
+func sync (db DB) {
+  if dbConfig := db.Fetch(); dbConfig == nil {
+    // Upload default config to DB if there wasn't any
+    db.Upsert(config)
   } else {
+    // Replace current config with the one from DB
+    config = dbConfig
+    // Rotate keys if passed time out
+    if time.Now().Sub(config.TimeStamp) >= config.TimeOut {
+      config.KeyPairs = [][]byte{
+        securecookie.GenerateRandomKey(LEN_KEY_AUTH),
+        securecookie.GenerateRandomKey(LEN_KEY_ENCR),
+        config.KeyPairs[0],
+        config.KeyPairs[1],
+      }
+      config.TimeStamp = time.Now()
+      db.Upsert(config)
+      // TODO: consider what to log
+      log.Print("INFO: Security keys rotated")
+    }
+    // Update keys from new config
+    // (Even if we haven't just rotated the keys in DB, a collaborator process most probably has done so)
+    updateKeys()
+  }
+}
+
+// TODO: make session data flexible?
+func LogIn (w http.ResponseWriter, r *http.Request, uid string) {
+  session, _ := store.Get(r, "Token")
+  session.Values["uid"] = uid
+  save(w, r)
+}
+
+func save (w http.ResponseWriter, r *http.Request) {
+  session, _ := store.Get(r, "Token")
+  session.Values["time"] = time.Now()
+  if err := session.Save(r, w); err != nil {
     // TODO: don't panic
     panic(err)
   }
 }
 
 func Authenticate (w http.ResponseWriter, r *http.Request) string {
-  var session sessiontype
-  if cookie, err := r.Cookie("Token"); err != nil {
+  session, _ := store.Get(r, "Token")
+  if session.IsNew {
     return redirect(w, r)
-  } else {
-    if err := securecookie.DecodeMulti("Token", cookie.Value, &session, codecs...); err != nil {
-      return redirect(w, r)
-    }
   }
   // Verify session time out
-  if time.Since(session.Time) > config.TimeOut {
+  if time.Since(session.Values["time"].(time.Time)) > config.TimeOut {
     return redirect(w, r)
   } else {
     // Update the Token cookie to include the current time
-    update(w, session.UID)
-    return session.UID
+    save(w, r)
+    return session.Values["uid"].(string)
   }
-}
-
-func update (w http.ResponseWriter, uid string) {
-  LogIn(w, uid)
 }
 
 // TODO: possible to add message with reason for redirect?
 func redirect (w http.ResponseWriter, r *http.Request) string {
   http.Redirect(w, r, config.RedirectPath + "?return=" + r.URL.Path, 302)
   return ""
+}
+
+func LogOut (w http.ResponseWriter, r *http.Request) {
+  session, _ := store.Get(r, "Token")
+  session.Options = &sessions.Options{
+    MaxAge: -1,
+  }
+  save(w, r)
 }
