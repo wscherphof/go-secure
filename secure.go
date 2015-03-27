@@ -49,7 +49,7 @@ func Init (db DB, optionalConfig ...*Config) {
     }
   }
   if config.LogInPath == "" {
-    config.LogInPath = "/login"
+    config.LogInPath = "/session"
   }
   if config.LogOutPath == "" {
     config.LogOutPath = "/"
@@ -94,7 +94,7 @@ func sync (db DB) {
       log.Print("INFO: Security keys rotated")
     }
     // Update keys from new config
-    // (Even if we haven't just rotated the keys in DB, a collaborator process most probably has done so)
+    // (even if we haven't rotated the keys in DB just now, a collaborator process most probably has)
     updateKeys()
   }
 }
