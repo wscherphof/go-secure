@@ -4,6 +4,7 @@ import (
   "time"
   "net/http"
   "log"
+  "errors"
   "encoding/gob"
   "github.com/gorilla/sessions"
   "github.com/gorilla/securecookie"
@@ -25,6 +26,7 @@ type DB interface {
 var (
   config *Config
   store *sessions.CookieStore
+  ErrTokenNotSaved = errors.New("secure: failed to save the session token")
 )
 
 const (
@@ -100,7 +102,7 @@ func sync (db DB) {
 }
 
 // TODO: make session data flexible?
-func LogIn (w http.ResponseWriter, r *http.Request, uid string) {
+func LogIn (w http.ResponseWriter, r *http.Request, uid string) error {
   session, _ := store.Get(r, "Token")
   session.Values["uid"] = uid
   session.Values["authenticated"] = time.Now()
@@ -109,10 +111,10 @@ func LogIn (w http.ResponseWriter, r *http.Request, uid string) {
     path = flashes[0].(string)
   }
   if err := session.Save(r, w); err != nil {
-    // TODO: don't panic
-    panic(err)
+    return ErrTokenNotSaved
   }
   http.Redirect(w, r, path, http.StatusSeeOther)
+  return nil
 }
 
 func Authenticate (w http.ResponseWriter, r *http.Request) string {
