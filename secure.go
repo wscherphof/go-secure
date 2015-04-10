@@ -62,7 +62,7 @@ func Init (db DB, optionalConfig ...*Config) {
   // Use keys from default config
   updateKeys()
   if db != nil {
-    go func () {
+    go func() {
       for {
         sync(db)
         time.Sleep(config.TimeOut)
@@ -102,7 +102,7 @@ func sync (db DB) {
 }
 
 // TODO: make session data flexible?
-func LogIn (w http.ResponseWriter, r *http.Request, uid string) error {
+func LogIn (w http.ResponseWriter, r *http.Request, uid string) (err error) {
   session, _ := store.Get(r, "Token")
   session.Values["uid"] = uid
   session.Values["authenticated"] = time.Now()
@@ -110,27 +110,25 @@ func LogIn (w http.ResponseWriter, r *http.Request, uid string) error {
   if flashes := session.Flashes("return"); len(flashes) > 0 {
     path = flashes[0].(string)
   }
-  if err := session.Save(r, w); err != nil {
-    return ErrTokenNotSaved
+  if err = session.Save(r, w); err != nil {
+    err = ErrTokenNotSaved
+  } else {
+    http.Redirect(w, r, path, http.StatusSeeOther)
   }
-  http.Redirect(w, r, path, http.StatusSeeOther)
-  return nil
+  return
 }
 
-func Authenticate (w http.ResponseWriter, r *http.Request) string {
-  authenticated, ret := false, ""
+func Authenticate (w http.ResponseWriter, r *http.Request) (uid string) {
   session, _ := store.Get(r, "Token")
   if session.IsNew || session.Values["authenticated"] == nil || time.Since(session.Values["authenticated"].(time.Time)) > config.TimeOut {
     session.AddFlash(r.URL.Path, "return")
+    defer http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
   } else {
+    uid = session.Values["uid"].(string)
     session.Values["authenticated"] = time.Now()
-    authenticated, ret = true, session.Values["uid"].(string)
   }
   _ = session.Save(r, w)
-  if !(authenticated) {
-    http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
-  }
-  return ret
+  return
 }
 
 func LogOut (w http.ResponseWriter, r *http.Request) {
