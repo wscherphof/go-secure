@@ -34,7 +34,8 @@ const (
   LEN_KEY_ENCR = 32
 )
 
-func Init (db DB, optionalConfig ...*Config) {
+func Init (account interface{}, db DB, optionalConfig ...*Config) {
+  gob.Register(account)
   gob.Register(time.Now())
   // Build default config, based on possible given config
   config = &Config {}
@@ -101,10 +102,9 @@ func sync (db DB) {
   }
 }
 
-// TODO: make session data flexible?
-func LogIn (w http.ResponseWriter, r *http.Request, uid string) (err error) {
+func LogIn (w http.ResponseWriter, r *http.Request, account interface{}) (err error) {
   session, _ := store.Get(r, "Token")
-  session.Values["uid"] = uid
+  session.Values["account"] = account
   session.Values["authenticated"] = time.Now()
   var path = "/"
   if flashes := session.Flashes("return"); len(flashes) > 0 {
@@ -118,13 +118,13 @@ func LogIn (w http.ResponseWriter, r *http.Request, uid string) (err error) {
   return
 }
 
-func Authenticate (w http.ResponseWriter, r *http.Request) (uid string) {
+func Authenticate (w http.ResponseWriter, r *http.Request) (account interface{}) {
   session, _ := store.Get(r, "Token")
   if session.IsNew || session.Values["authenticated"] == nil || time.Since(session.Values["authenticated"].(time.Time)) > config.TimeOut {
     session.AddFlash(r.URL.Path, "return")
     defer http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
   } else {
-    uid = session.Values["uid"].(string)
+    account = session.Values["account"]
     session.Values["authenticated"] = time.Now()
   }
   _ = session.Save(r, w)
