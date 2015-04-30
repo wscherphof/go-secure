@@ -16,6 +16,8 @@ type Config struct {
   LogInPath string
   LogOutPath string
   TimeOut time.Duration
+  // TODO: Token time out apart from Session time out
+  // Need a Created time _inside_ the cookie, so not through http://en.wikipedia.org/wiki/HTTP_cookie#Expires_and_Max-Age
 }
 
 type DB interface {
@@ -103,6 +105,7 @@ func sync (db DB) {
 }
 
 func LogIn (w http.ResponseWriter, r *http.Request, account interface{}) (err error) {
+  // TODO: refuse setting the cookie w/o r.TLS
   session, _ := store.Get(r, "Token")
   session.Values["account"] = account
   session.Values["authenticated"] = time.Now()
