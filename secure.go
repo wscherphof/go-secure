@@ -16,8 +16,7 @@ type Config struct {
   LogInPath string
   LogOutPath string
   TimeOut time.Duration
-  // TODO: Token time out apart from Session time out
-  // Need a Created time _inside_ the cookie, so not through http://en.wikipedia.org/wiki/HTTP_cookie#Expires_and_Max-Age
+  TokenTimeOut time.Duration
 }
 
 type DB interface {
@@ -36,6 +35,8 @@ const (
   LEN_KEY_ENCR = 32
 )
 
+// TODO: init with function that checks on TokenTimeout whether the account details saved in the session are stale, to prevent unneeded rechallenging
+// also: session timeout can maybe be like 5 days instead of 15 minutes, while stale check can be like every hour
 func Init (account interface{}, db DB, optionalConfig ...*Config) {
   gob.Register(account)
   gob.Register(time.Now())
@@ -60,7 +61,10 @@ func Init (account interface{}, db DB, optionalConfig ...*Config) {
     config.LogOutPath = "/"
   }
   if config.TimeOut == 0 {
-    config.TimeOut = 15 * 60 * time.Second
+    config.TimeOut = 15 * time.Minute
+  }
+  if config.TokenTimeOut == 0 {
+    config.TokenTimeOut = 36 * time.Hour
   }
   // Use keys from default config
   updateKeys()
@@ -108,6 +112,7 @@ func LogIn (w http.ResponseWriter, r *http.Request, account interface{}) (err er
   // TODO: refuse setting the cookie w/o r.TLS
   session, _ := store.Get(r, "Token")
   session.Values["account"] = account
+  session.Values["challenged"] = time.Now()
   session.Values["authenticated"] = time.Now()
   var path = "/"
   if flashes := session.Flashes("return"); len(flashes) > 0 {
@@ -123,7 +128,9 @@ func LogIn (w http.ResponseWriter, r *http.Request, account interface{}) (err er
 
 func Authenticate (w http.ResponseWriter, r *http.Request) (account interface{}) {
   session, _ := store.Get(r, "Token")
-  if session.IsNew || session.Values["authenticated"] == nil || time.Since(session.Values["authenticated"].(time.Time)) > config.TimeOut {
+  authenticated, challenged := session.Values["authenticated"], session.Values["challenged"]
+  doChallenge := session.IsNew || authenticated == nil || challenged == nil
+  if doChallenge || time.Since(authenticated.(time.Time)) > config.TimeOut || time.Since(challenged.(time.Time)) > config.TokenTimeOut {
     session.AddFlash(r.URL.Path, "return")
     defer http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
   } else {
