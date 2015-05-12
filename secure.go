@@ -37,6 +37,7 @@ const (
 
 // TODO: init with function that checks on TokenTimeout whether the account details saved in the session are stale, to prevent unneeded rechallenging
 // also: session timeout can maybe be like 5 days instead of 15 minutes, while stale check can be like every hour
+// Hm, but still doesn't seem to make all that much sense, since it would only be stale after changing password or otherwise editing the account, in which case we could just LogOut explicitly..
 func Init (account interface{}, db DB, optionalConfig ...*Config) {
   gob.Register(account)
   gob.Register(time.Now())
