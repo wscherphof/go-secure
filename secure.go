@@ -38,6 +38,8 @@ const (
   LEN_KEY_ENCR = 32
 )
 
+// TODO: Just provide an Update function to actively update the account record in the cookie,
+// instead of the complex polling for changes
 func Init (account interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
   gob.Register(account)
   gob.Register(time.Now())
