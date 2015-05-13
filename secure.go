@@ -16,7 +16,7 @@ type Config struct {
   LogInPath string
   LogOutPath string
   TimeOut time.Duration
-  TokenTimeOut time.Duration
+  SyncInterval time.Duration
 }
 
 type DB interface {
@@ -24,9 +24,12 @@ type DB interface {
   Upsert (*Config)
 }
 
+type Validate func(interface{}) bool
+
 var (
   config *Config
   store *sessions.CookieStore
+  validate Validate
   ErrTokenNotSaved = errors.New("secure: failed to save the session token")
 )
 
@@ -35,13 +38,10 @@ const (
   LEN_KEY_ENCR = 32
 )
 
-// TODO: init with function that checks on TokenTimeout whether the account details saved in the session are stale, to prevent unneeded rechallenging
-// also: session timeout can maybe be like 5 days instead of 15 minutes, while stale check can be like every hour
-// Hm, but still doesn't seem to make all that much sense, since it would only be stale after changing password or otherwise editing the account, in which case we could just LogOut explicitly..
-// Probably. it's best to just ditch the _inactivity_ timeout altogether
-func Init (account interface{}, db DB, optionalConfig ...*Config) {
+func Init (account interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
   gob.Register(account)
   gob.Register(time.Now())
+  validate = validateFunc
   // Build default config, based on possible given config
   config = &Config {}
   if len(optionalConfig) > 0 {
@@ -63,10 +63,10 @@ func Init (account interface{}, db DB, optionalConfig ...*Config) {
     config.LogOutPath = "/"
   }
   if config.TimeOut == 0 {
-    config.TimeOut = 15 * time.Minute
+    config.TimeOut = 6 * time.Month
   }
-  if config.TokenTimeOut == 0 {
-    config.TokenTimeOut = 36 * time.Hour
+  if config.SyncInterval == 0 {
+    config.SyncInterval = 10 * time.Minute
   }
   // Use keys from default config
   updateKeys()
@@ -74,7 +74,7 @@ func Init (account interface{}, db DB, optionalConfig ...*Config) {
     go func() {
       for {
         sync(db)
-        time.Sleep(config.TimeOut)
+        time.Sleep(config.SyncInterval)
       }
     }()
   }
@@ -114,12 +114,13 @@ func LogIn (w http.ResponseWriter, r *http.Request, account interface{}) (err er
   // TODO: refuse setting the cookie w/o r.TLS
   session, _ := store.Get(r, "Token")
   session.Values["account"] = account
-  session.Values["challenged"] = time.Now()
-  session.Values["authenticated"] = time.Now()
+  session.Values["created"] = time.Now()
+  session.Values["validated"] = time.Now()
   var path = "/"
   if flashes := session.Flashes("return"); len(flashes) > 0 {
     path = flashes[0].(string)
   }
+  // TODO: !!! set the cookie's Expires according to config.TimeOut
   if err = session.Save(r, w); err != nil {
     err = ErrTokenNotSaved
   } else {
@@ -128,16 +129,42 @@ func LogIn (w http.ResponseWriter, r *http.Request, account interface{}) (err er
   return
 }
 
+func timedOut (session *sessions.Session) result bool {
+  created := session.Values["created"]
+  result = true
+  if created != nil {
+    result = false
+    if time.Since(created.(time.Time)) > config.TimeOut {
+      result = true
+    }
+  }
+  return
+}
+
+func stale (session *sessions.Session) result bool {
+  validated := session.Values["validated"]
+  result = true
+  if validated != nil {
+    result = false
+    if time.Since(validated.(time.Time)) > config.SyncInterval {
+      result = true
+      if validate(session.Values["account"]) {
+        result = false
+        session.Values["validated"] = time.Now()
+      }
+    }
+  }
+  return
+}
+
 func Authenticate (w http.ResponseWriter, r *http.Request) (account interface{}) {
   session, _ := store.Get(r, "Token")
-  authenticated, challenged := session.Values["authenticated"], session.Values["challenged"]
-  doChallenge := session.IsNew || authenticated == nil || challenged == nil
-  if doChallenge || time.Since(authenticated.(time.Time)) > config.TimeOut || time.Since(challenged.(time.Time)) > config.TokenTimeOut {
+  if session.IsNew || timedOut(session) || stale(session) {
+    session.Values["account"] = nil
     session.AddFlash(r.URL.Path, "return")
     defer http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
   } else {
     account = session.Values["account"]
-    session.Values["authenticated"] = time.Now()
   }
   _ = session.Save(r, w)
   return
