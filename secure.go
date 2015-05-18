@@ -113,17 +113,19 @@ func sync (db DB) {
 func LogIn (w http.ResponseWriter, r *http.Request, account interface{}, redirect bool) (err error) {
   // TODO: refuse setting the cookie w/o r.TLS
   session, _ := store.Get(r, "Token")
+  session.Options = &sessions.Options{
+    MaxAge: int(config.TimeOut / time.Second),
+  }
   session.Values["account"] = account
   session.Values["created"] = time.Now()
   session.Values["validated"] = time.Now()
-  var path = "/"
-  if flashes := session.Flashes("return"); len(flashes) > 0 {
-    path = flashes[0].(string)
-  }
-  // TODO: !!! set the cookie's Expires according to config.TimeOut
   if err = session.Save(r, w); err != nil {
     err = ErrTokenNotSaved
   } else if redirect {
+    path := "/"
+    if flashes := session.Flashes("return"); len(flashes) > 0 {
+      path = flashes[0].(string)
+    }
     http.Redirect(w, r, path, http.StatusSeeOther)
   }
   return
