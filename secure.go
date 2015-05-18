@@ -110,7 +110,7 @@ func sync (db DB) {
   }
 }
 
-func LogIn (w http.ResponseWriter, r *http.Request, account interface{}) (err error) {
+func LogIn (w http.ResponseWriter, r *http.Request, account interface{}, redirect bool) (err error) {
   // TODO: refuse setting the cookie w/o r.TLS
   session, _ := store.Get(r, "Token")
   session.Values["account"] = account
@@ -123,7 +123,7 @@ func LogIn (w http.ResponseWriter, r *http.Request, account interface{}) (err er
   // TODO: !!! set the cookie's Expires according to config.TimeOut
   if err = session.Save(r, w); err != nil {
     err = ErrTokenNotSaved
-  } else {
+  } else if redirect {
     http.Redirect(w, r, path, http.StatusSeeOther)
   }
   return
