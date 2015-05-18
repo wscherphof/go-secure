@@ -105,7 +105,7 @@ func sync (db DB) {
       log.Print("INFO: Security keys rotated")
     }
     // Update keys from new config
-    // (even if we haven't rotated the keys in DB just now, a collaborator process most probably has)
+    // (even if we haven't rotated the keys in DB just now, a collaborator process might have)
     updateKeys()
   }
 }
@@ -163,11 +163,13 @@ func Authenticate (w http.ResponseWriter, r *http.Request) (account interface{})
   return
 }
 
-func LogOut (w http.ResponseWriter, r *http.Request) {
+func LogOut (w http.ResponseWriter, r *http.Request, redirect bool) {
   session, _ := store.Get(r, "Token")
   session.Options = &sessions.Options{
     MaxAge: -1,
   }
   _ = session.Save(r, w)
-  http.Redirect(w, r, config.LogOutPath, http.StatusSeeOther)
+  if redirect {
+    http.Redirect(w, r, config.LogOutPath, http.StatusSeeOther)
+  }
 }
