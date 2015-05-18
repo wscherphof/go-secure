@@ -24,7 +24,7 @@ type DB interface {
   Upsert (*Config)
 }
 
-type Validate func(interface{}) bool
+type Validate func(interface{}) (interface{}, bool)
 
 var (
   config *Config
@@ -63,10 +63,10 @@ func Init (account interface{}, db DB, validateFunc Validate, optionalConfig ...
     config.LogOutPath = "/"
   }
   if config.TimeOut == 0 {
-    config.TimeOut = 6 * time.Month
+    config.TimeOut = 6 * 30 * 24 * time.Hour
   }
   if config.SyncInterval == 0 {
-    config.SyncInterval = 10 * time.Minute
+    config.SyncInterval = 5 * time.Minute
   }
   // Use keys from default config
   updateKeys()
@@ -129,29 +129,22 @@ func LogIn (w http.ResponseWriter, r *http.Request, account interface{}) (err er
   return
 }
 
-func timedOut (session *sessions.Session) result bool {
+func sessionCurrent (session *sessions.Session) (current bool) {
   created := session.Values["created"]
-  result = true
-  if created != nil {
-    result = false
-    if time.Since(created.(time.Time)) > config.TimeOut {
-      result = true
-    }
+  if created != nil && time.Since(created.(time.Time)) < config.TimeOut {
+    current = true
   }
   return
 }
 
-func stale (session *sessions.Session) result bool {
+func accountCurrent (session *sessions.Session) (current bool) {
   validated := session.Values["validated"]
-  result = true
   if validated != nil {
-    result = false
-    if time.Since(validated.(time.Time)) > config.SyncInterval {
-      result = true
-      if validate(session.Values["account"]) {
-        result = false
-        session.Values["validated"] = time.Now()
-      }
+    if time.Since(validated.(time.Time)) < config.SyncInterval {
+      current = true
+    } else  {
+      session.Values["account"], current = validate(session.Values["account"])
+      session.Values["validated"] = time.Now()
     }
   }
   return
@@ -159,7 +152,7 @@ func stale (session *sessions.Session) result bool {
 
 func Authenticate (w http.ResponseWriter, r *http.Request) (account interface{}) {
   session, _ := store.Get(r, "Token")
-  if session.IsNew || timedOut(session) || stale(session) {
+  if session.IsNew || ! sessionCurrent(session) || ! accountCurrent(session) {
     session.Values["account"] = nil
     session.AddFlash(r.URL.Path, "return")
     defer http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
