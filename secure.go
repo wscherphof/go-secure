@@ -154,7 +154,7 @@ func accountCurrent (session *sessions.Session) (current bool) {
 
 func Authenticate (w http.ResponseWriter, r *http.Request) (account interface{}) {
   session, _ := store.Get(r, "Token")
-  if session.IsNew || ! sessionCurrent(session) || ! accountCurrent(session) {
+  if session.IsNew || !sessionCurrent(session) || !accountCurrent(session) {
     session.Values["account"] = nil
     session.AddFlash(r.URL.Path, "return")
     defer http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
