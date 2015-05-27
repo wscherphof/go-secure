@@ -83,6 +83,10 @@ func Init (account interface{}, db DB, validateFunc Validate, optionalConfig ...
 
 func updateKeys () {
   store = sessions.NewCookieStore(config.KeyPairs...)
+  store.Options = &sessions.Options{
+    MaxAge: int(config.TimeOut / time.Second),
+    Secure: true,
+  }
 }
 
 func sync (db DB) {
@@ -113,9 +117,6 @@ func sync (db DB) {
 
 func LogIn (w http.ResponseWriter, r *http.Request, account interface{}, redirect bool) (err error) {
   session, _ := store.Get(r, "Token")
-  session.Options = &sessions.Options{
-    MaxAge: int(config.TimeOut / time.Second),
-  }
   session.Values["account"] = account
   session.Values["created"] = time.Now()
   session.Values["validated"] = time.Now()
