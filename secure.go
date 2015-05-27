@@ -142,7 +142,7 @@ func sessionCurrent (session *sessions.Session) (current bool) {
   return
 }
 
-func accountCurrent (session *sessions.Session) (current bool) {
+func accountCurrent (session *sessions.Session, w http.ResponseWriter, r *http.Request) (current bool) {
   validated := session.Values["validated"]
   if validated != nil {
     if time.Since(validated.(time.Time)) < config.SyncInterval {
@@ -150,6 +150,7 @@ func accountCurrent (session *sessions.Session) (current bool) {
     } else  {
       session.Values["account"], current = validate(session.Values["account"])
       session.Values["validated"] = time.Now()
+      _ = session.Save(r, w)
     }
   }
   return
@@ -157,14 +158,14 @@ func accountCurrent (session *sessions.Session) (current bool) {
 
 func Authenticate (w http.ResponseWriter, r *http.Request) (account interface{}) {
   session, _ := store.Get(r, "Token")
-  if session.IsNew || !sessionCurrent(session) || !accountCurrent(session) {
+  if session.IsNew || !sessionCurrent(session) || !accountCurrent(session, w, r) {
     session.Values["account"] = nil
     session.AddFlash(r.URL.Path, "return")
-    defer http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
+    _ = session.Save(r, w)
+    http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
   } else {
     account = session.Values["account"]
   }
-  _ = session.Save(r, w)
   return
 }
 
