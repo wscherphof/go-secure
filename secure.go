@@ -171,6 +171,7 @@ func Authenticate (w http.ResponseWriter, r *http.Request) (account interface{})
 
 func LogOut (w http.ResponseWriter, r *http.Request, redirect bool) {
   session, _ := store.Get(r, "Token")
+  session.Values = make(map[interface{}]interface{})
   session.Options = &sessions.Options{
     MaxAge: -1,
   }
