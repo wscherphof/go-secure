@@ -31,6 +31,7 @@ var (
   store *sessions.CookieStore
   validate Validate
   ErrTokenNotSaved = errors.New("secure: failed to save the session token")
+  ErrNoTLS = errors.New("secure: logging in requires an encrypted conection")
 )
 
 const (
@@ -111,7 +112,6 @@ func sync (db DB) {
 }
 
 func LogIn (w http.ResponseWriter, r *http.Request, account interface{}, redirect bool) (err error) {
-  // TODO: refuse setting the cookie w/o r.TLS
   session, _ := store.Get(r, "Token")
   session.Options = &sessions.Options{
     MaxAge: int(config.TimeOut / time.Second),
@@ -119,7 +119,9 @@ func LogIn (w http.ResponseWriter, r *http.Request, account interface{}, redirec
   session.Values["account"] = account
   session.Values["created"] = time.Now()
   session.Values["validated"] = time.Now()
-  if err = session.Save(r, w); err != nil {
+  if r.TLS == nil {
+    err = ErrNoTLS
+  } else if err = session.Save(r, w); err != nil {
     err = ErrTokenNotSaved
   } else if redirect {
     path := "/"
