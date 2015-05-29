@@ -35,13 +35,13 @@ var (
 )
 
 const (
-  LEN_KEY_AUTH int = 32
-  LEN_KEY_ENCR int = 32
-  TOKEN     string = "authentication-token"
-  RECORD    string = "ddf77ee1-6a23-4980-8edc-ff4139e98f22"
-  CREATED   string = "45595a0b-7756-428e-bae0-5f7ded324e92"
-  VALIDATED string = "fe6f1315-9aa1-4083-89a0-dcb6c198654b"
-  RETURN    string = "eb8cacdd-d65f-441e-a63d-e4da69c2badc"
+  LEN_KEY_AUTH = 32
+  LEN_KEY_ENCR = 32
+  TOKEN     = "authentication-token"
+  RECORD    = "ddf77ee1-6a23-4980-8edc-ff4139e98f22"
+  CREATED   = "45595a0b-7756-428e-bae0-5f7ded324e92"
+  VALIDATED = "fe6f1315-9aa1-4083-89a0-dcb6c198654b"
+  RETURN    = "eb8cacdd-d65f-441e-a63d-e4da69c2badc"
 )
 
 func Init (record interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
