@@ -9,8 +9,6 @@ import (
 
 const AUTH_KEY string = "b53d6eda-40f9-4d4b-a8ff-49e19d2f116f"
 
-var UpdateAuthentication = secure.UpdateAuthentication
-
 // TODO: DRY
 
 func Authenticate (handle httprouter.Handle) (httprouter.Handle) {
