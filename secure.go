@@ -148,15 +148,22 @@ func sessionCurrent (session *sessions.Session) (current bool) {
   return
 }
 
+func UpdateAuthentication (w http.ResponseWriter, r *http.Request, record interface{}) {
+  session, _ := store.Get(r, TOKEN)
+  session.Values[RECORD] = record
+  session.Values[VALIDATED] = time.Now()
+  _ = session.Save(r, w)
+}
+
 func accountCurrent (session *sessions.Session, w http.ResponseWriter, r *http.Request) (current bool) {
   validated := session.Values[VALIDATED]
   if validated != nil {
     if time.Since(validated.(time.Time)) < config.SyncInterval {
       current = true
     } else  {
-      session.Values[RECORD], current = validate(session.Values[RECORD])
-      session.Values[VALIDATED] = time.Now()
-      _ = session.Save(r, w)
+      record, cur := validate(session.Values[RECORD])
+      current = cur
+      UpdateAuthentication(w, r, record)
     }
   }
   return
