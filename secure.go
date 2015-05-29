@@ -120,10 +120,15 @@ func sync (db DB) {
   }
 }
 
+func getToken (r *http.Request) (session *sessions.Session) {
+  session, _ = store.Get(r, TOKEN)
+  return
+}
+
 func LogIn (w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
-  session, _ := store.Get(r, TOKEN)
-  session.Values[RECORD] = record
-  session.Values[CREATED] = time.Now()
+  session := getToken(r)
+  session.Values[RECORD]    = record
+  session.Values[CREATED]   = time.Now()
   session.Values[VALIDATED] = time.Now()
   redirectPath := session.Values[RETURN]
   delete(session.Values, RETURN)
@@ -140,19 +145,19 @@ func LogIn (w http.ResponseWriter, r *http.Request, record interface{}, redirect
   return
 }
 
+func UpdateAuthentication (w http.ResponseWriter, r *http.Request, record interface{}) {
+  session := getToken(r)
+  session.Values[RECORD]    = record
+  session.Values[VALIDATED] = time.Now()
+  _ = session.Save(r, w)
+}
+
 func sessionCurrent (session *sessions.Session) (current bool) {
   created := session.Values[CREATED]
   if created != nil && time.Since(created.(time.Time)) < config.TimeOut {
     current = true
   }
   return
-}
-
-func UpdateAuthentication (w http.ResponseWriter, r *http.Request, record interface{}) {
-  session, _ := store.Get(r, TOKEN)
-  session.Values[RECORD] = record
-  session.Values[VALIDATED] = time.Now()
-  _ = session.Save(r, w)
 }
 
 func accountCurrent (session *sessions.Session, w http.ResponseWriter, r *http.Request) (current bool) {
@@ -169,23 +174,24 @@ func accountCurrent (session *sessions.Session, w http.ResponseWriter, r *http.R
   return
 }
 
-func Authenticate (w http.ResponseWriter, r *http.Request, redirect bool) (record interface{}) {
-  session, _ := store.Get(r, TOKEN)
-  if session.IsNew || !sessionCurrent(session) || !accountCurrent(session, w, r) {
-    delete(session.Values, RECORD)
-    if redirect {
-      session.Values[RETURN] = r.URL.Path
-      defer http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
-    }
-    _ = session.Save(r, w)
-  } else {
+func Authentication (w http.ResponseWriter, r *http.Request) (record interface{}) {
+  session := getToken(r)
+  if !session.IsNew && sessionCurrent(session) && accountCurrent(session, w, r) {
     record = session.Values[RECORD]
   }
   return
 }
 
+func Challenge (w http.ResponseWriter, r *http.Request) {
+  session := getToken(r)
+  delete(session.Values, RECORD)
+  session.Values[RETURN] = r.URL.Path
+  _ = session.Save(r, w)
+  http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
+}
+
 func LogOut (w http.ResponseWriter, r *http.Request, redirect bool) {
-  session, _ := store.Get(r, TOKEN)
+  session := getToken(r)
   session.Values = make(map[interface{}]interface{})
   session.Options = &sessions.Options{
     MaxAge: -1,
