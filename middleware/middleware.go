@@ -12,6 +12,10 @@ func setAuthentication (r *http.Request, authentication interface{}) {
   context.Set(r, AUTH_KEY, authentication)
 }
 
+func SetAuthentication (r *http.Request, authentication interface{}) {
+  context.Set(r, AUTH_KEY, authentication)
+}
+
 func AuthenticationHandler (handler http.Handler) (http.Handler) {
   return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
     setAuthentication(r, secure.Authentication(w, r))
