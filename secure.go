@@ -24,7 +24,7 @@ type DB interface {
   Upsert (*Config)
 }
 
-type Validate func(src interface{}) (dst interface{}, current bool)
+type Validate func(src interface{})(dst interface{}, valid bool)
 
 var (
   config *Config
@@ -50,12 +50,12 @@ const (
   RETURN    = "eb8cacdd-d65f-441e-a63d-e4da69c2badc"
 )
 
-func Init (record interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
+func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
   gob.Register(record)
   gob.Register(time.Now())
   validate = validateFunc
   // Build default config, based on possible given config
-  config = &Config {}
+  config = &Config{}
   if len(optionalConfig) > 0 {
     config = optionalConfig[0]
   }
