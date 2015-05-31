@@ -24,12 +24,15 @@ type DB interface {
   Upsert (*Config)
 }
 
-type Validate func(interface{}) (interface{}, bool)
+type Validate func(src interface{}) (dst interface{}, current bool)
 
 var (
   config *Config
   store *sessions.CookieStore
   validate Validate
+)
+
+var (
   ErrTokenNotSaved = errors.New("secure: failed to save the session token")
   ErrNoTLS = errors.New("secure: logging in requires an encrypted conection")
 )
@@ -37,6 +40,9 @@ var (
 const (
   LEN_KEY_AUTH = 32
   LEN_KEY_ENCR = 32
+)
+
+const (
   TOKEN     = "authentication-token"
   RECORD    = "ddf77ee1-6a23-4980-8edc-ff4139e98f22"
   CREATED   = "45595a0b-7756-428e-bae0-5f7ded324e92"
