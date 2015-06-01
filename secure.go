@@ -92,7 +92,7 @@ func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig 
   }
 }
 
-func updateKeys () {
+func updateKeys() {
   store = sessions.NewCookieStore(config.KeyPairs...)
   store.Options = &sessions.Options{
     MaxAge: int(config.TimeOut / time.Second),
@@ -100,7 +100,7 @@ func updateKeys () {
   }
 }
 
-func sync (db DB) {
+func sync(db DB) {
   if dbConfig := db.Fetch(); dbConfig == nil {
     // Upload default config to DB if there wasn't any
     db.Upsert(config)
@@ -126,19 +126,18 @@ func sync (db DB) {
   }
 }
 
-func getToken (r *http.Request) (session *sessions.Session) {
+func getToken(r *http.Request) (session *sessions.Session) {
   session, _ = store.Get(r, TOKEN)
   return
 }
 
-func LogIn (w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
+func LogIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
   session := getToken(r)
   session.Options = store.Options
   session.Values[RECORD]    = record
   session.Values[CREATED]   = time.Now()
   session.Values[VALIDATED] = time.Now()
   redirectPath := session.Values[RETURN]
-  delete(session.Values, RETURN)
   if r.TLS == nil {
     err = ErrNoTLS
   } else if err = session.Save(r, w); err != nil {
@@ -152,7 +151,7 @@ func LogIn (w http.ResponseWriter, r *http.Request, record interface{}, redirect
   return
 }
 
-func sessionCurrent (session *sessions.Session) (current bool) {
+func sessionCurrent(session *sessions.Session) (current bool) {
   created := session.Values[CREATED]
   if created != nil && time.Since(created.(time.Time)) < config.TimeOut {
     current = true
@@ -160,23 +159,21 @@ func sessionCurrent (session *sessions.Session) (current bool) {
   return
 }
 
-func accountCurrent (session *sessions.Session, w http.ResponseWriter, r *http.Request) (current bool) {
+func accountCurrent(session *sessions.Session, w http.ResponseWriter, r *http.Request) (current bool) {
   validated := session.Values[VALIDATED]
-  if validated != nil {
-    if time.Since(validated.(time.Time)) < config.SyncInterval {
-      current = true
-    } else  {
-      record, cur := validate(session.Values[RECORD])
-      current = cur
-      session.Values[RECORD]    = record
-      session.Values[VALIDATED] = time.Now()
-      _ = session.Save(r, w)
-    }
+  if validated == nil {
+  } else if cur := (time.Since(validated.(time.Time)) < config.SyncInterval); cur {
+    current = true
+  } else if record, cur := validate(session.Values[RECORD]); cur {
+    session.Values[RECORD]    = record
+    session.Values[VALIDATED] = time.Now()
+    _ = session.Save(r, w)
+    current = true
   }
   return
 }
 
-func Authentication (w http.ResponseWriter, r *http.Request) (record interface{}) {
+func Authentication(w http.ResponseWriter, r *http.Request) (record interface{}) {
   session := getToken(r)
   if !session.IsNew && sessionCurrent(session) && accountCurrent(session, w, r) {
     record = session.Values[RECORD]
@@ -184,17 +181,23 @@ func Authentication (w http.ResponseWriter, r *http.Request) (record interface{}
   return
 }
 
-func Challenge (w http.ResponseWriter, r *http.Request) {
-  session := getToken(r)
+func clear(session *sessions.Session) {
   delete(session.Values, RECORD)
+  delete(session.Values, CREATED)
+  delete(session.Values, VALIDATED)
+}
+
+func Challenge(w http.ResponseWriter, r *http.Request) {
+  session := getToken(r)
+  clear(session)
   session.Values[RETURN] = r.URL.Path
   _ = session.Save(r, w)
   http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
 }
 
-func LogOut (w http.ResponseWriter, r *http.Request, redirect bool) {
+func LogOut(w http.ResponseWriter, r *http.Request, redirect bool) {
   session := getToken(r)
-  session.Values = make(map[interface{}]interface{})
+  clear(session)
   session.Options = &sessions.Options{
     MaxAge: -1,
   }
