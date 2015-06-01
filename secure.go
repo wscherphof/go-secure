@@ -133,6 +133,7 @@ func getToken (r *http.Request) (session *sessions.Session) {
 
 func LogIn (w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
   session := getToken(r)
+  session.Options = store.Options
   session.Values[RECORD]    = record
   session.Values[CREATED]   = time.Now()
   session.Values[VALIDATED] = time.Now()
@@ -151,13 +152,6 @@ func LogIn (w http.ResponseWriter, r *http.Request, record interface{}, redirect
   return
 }
 
-func UpdateAuthentication (w http.ResponseWriter, r *http.Request, record interface{}) {
-  session := getToken(r)
-  session.Values[RECORD]    = record
-  session.Values[VALIDATED] = time.Now()
-  _ = session.Save(r, w)
-}
-
 func sessionCurrent (session *sessions.Session) (current bool) {
   created := session.Values[CREATED]
   if created != nil && time.Since(created.(time.Time)) < config.TimeOut {
@@ -174,7 +168,9 @@ func accountCurrent (session *sessions.Session, w http.ResponseWriter, r *http.R
     } else  {
       record, cur := validate(session.Values[RECORD])
       current = cur
-      UpdateAuthentication(w, r, record)
+      session.Values[RECORD]    = record
+      session.Values[VALIDATED] = time.Now()
+      _ = session.Save(r, w)
     }
   }
   return
