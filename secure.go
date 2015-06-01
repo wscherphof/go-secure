@@ -134,13 +134,15 @@ func getToken(r *http.Request) (session *sessions.Session) {
 func LogIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
   session := getToken(r)
   session.Options = store.Options
+  if session.Values[CREATED] == nil {
+    session.Values[CREATED] = time.Now()
+  }
   session.Values[RECORD]    = record
-  session.Values[CREATED]   = time.Now()
   session.Values[VALIDATED] = time.Now()
   redirectPath := session.Values[RETURN]
   if r.TLS == nil {
     err = ErrNoTLS
-  } else if err = session.Save(r, w); err != nil {
+  } else if e := session.Save(r, w); e != nil {
     err = ErrTokenNotSaved
   } else if redirect {
     if redirectPath == nil {
