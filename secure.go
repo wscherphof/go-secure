@@ -43,7 +43,7 @@ const (
 )
 
 const (
-  TOKEN     = "authentication-token"
+  TOKEN     = "authtoken"
   RECORD    = "ddf77ee1-6a23-4980-8edc-ff4139e98f22"
   CREATED   = "45595a0b-7756-428e-bae0-5f7ded324e92"
   VALIDATED = "fe6f1315-9aa1-4083-89a0-dcb6c198654b"
