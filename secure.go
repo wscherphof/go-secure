@@ -119,7 +119,7 @@ func sync(db DB) {
       config.TimeStamp = time.Now()
       db.Upsert(config)
       // TODO: consider what to log
-      log.Print("INFO: Security keys rotated")
+      log.Println("INFO: Security keys rotated")
     }
     // Update keys from new config
     // (even if we haven't rotated the keys in DB just now, a collaborator process might have)
