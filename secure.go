@@ -97,6 +97,7 @@ func updateKeys() {
   store.Options = &sessions.Options{
     MaxAge: int(config.TimeOut / time.Second),
     Secure: true,
+    Path: "/",
   }
 }
 
@@ -128,12 +129,12 @@ func sync(db DB) {
 
 func getToken(r *http.Request) (session *sessions.Session) {
   session, _ = store.Get(r, TOKEN)
+  session.Options = store.Options
   return
 }
 
 func LogIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
   session := getToken(r)
-  session.Options = store.Options
   if session.Values[CREATED] == nil {
     session.Values[CREATED] = time.Now()
   }
@@ -200,9 +201,7 @@ func Challenge(w http.ResponseWriter, r *http.Request) {
 func LogOut(w http.ResponseWriter, r *http.Request, redirect bool) {
   session := getToken(r)
   clear(session)
-  session.Options = &sessions.Options{
-    MaxAge: -1,
-  }
+  session.Options.MaxAge = -1
   _ = session.Save(r, w)
   if redirect {
     http.Redirect(w, r, config.LogOutPath, http.StatusSeeOther)
