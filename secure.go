@@ -36,9 +36,8 @@ var (
 )
 
 var (
-	config         *Config
-	store          *sessions.CookieStore
-	sessionOptions *sessions.Options
+	config *Config
+	store  *sessions.CookieStore
 )
 
 const (
@@ -54,9 +53,9 @@ const (
 	returnField    = "eb8cacdd-d65f-441e-a63d-e4da69c2badc"
 )
 
-func configureSessions() {
+func configureStore() {
 	store = sessions.NewCookieStore(config.KeyPairs...)
-	sessionOptions = &sessions.Options{
+	store.Options = &sessions.Options{
 		MaxAge: int(config.TimeOut / time.Second),
 		Secure: true,
 		Path:   "/",
@@ -97,7 +96,7 @@ func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig 
 			config.KeyPairs = opt.KeyPairs
 		}
 	}
-	configureSessions()
+	configureStore()
 	if db != nil {
 		go func() {
 			for {
@@ -130,13 +129,12 @@ func sync(db DB) {
 			db.Upsert(config)
 			log.Println("INFO: Security keys rotated")
 		}
-		configureSessions()
+		configureStore()
 	}
 }
 
 func getToken(r *http.Request) (session *sessions.Session) {
 	session, _ = store.Get(r, tokenName)
-	session.Options = sessionOptions
 	return
 }
 
@@ -162,16 +160,16 @@ func LogIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect 
 }
 
 func sessionCurrent(session *sessions.Session) (current bool) {
-	created := session.Values[createdField]
-	if created != nil && time.Since(created.(time.Time)) < config.TimeOut {
-		current = true
+	if created := session.Values[createdField]; created == nil {
+	} else {
+		current = time.Since(created.(time.Time)) < config.TimeOut
 	}
 	return
 }
 
 func accountCurrent(session *sessions.Session, w http.ResponseWriter, r *http.Request) (current bool) {
 	if validated := session.Values[validatedField]; validated == nil {
-	} else if cur := (time.Since(validated.(time.Time)) < config.SyncInterval); cur {
+	} else if cur := time.Since(validated.(time.Time)) < config.SyncInterval; cur {
 		current = true
 	} else if record, cur := validate(session.Values[recordField]); cur {
 		session.Values[recordField] = record
@@ -190,23 +188,23 @@ func Authentication(w http.ResponseWriter, r *http.Request) (record interface{})
 	return
 }
 
-func clear(session *sessions.Session) {
+func clearToken(r *http.Request) (session *sessions.Session) {
+	session = getToken(r)
 	delete(session.Values, recordField)
 	delete(session.Values, createdField)
 	delete(session.Values, validatedField)
+	return
 }
 
 func Challenge(w http.ResponseWriter, r *http.Request) {
-	session := getToken(r)
-	clear(session)
+	session := clearToken(r)
 	session.Values[returnField] = r.URL.Path
 	_ = session.Save(r, w)
 	http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
 }
 
 func LogOut(w http.ResponseWriter, r *http.Request, redirect bool) {
-	session := getToken(r)
-	clear(session)
+	session := clearToken(r)
 	session.Options = &sessions.Options{
 		MaxAge: -1,
 	}
