@@ -201,7 +201,9 @@ func Challenge(w http.ResponseWriter, r *http.Request) {
 func LogOut(w http.ResponseWriter, r *http.Request, redirect bool) {
   session := getToken(r)
   clear(session)
-  session.Options.MaxAge = -1
+  session.Options = &sessions.Options{
+    MaxAge: -1,
+  }
   _ = session.Save(r, w)
   if redirect {
     http.Redirect(w, r, config.LogOutPath, http.StatusSeeOther)
