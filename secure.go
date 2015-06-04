@@ -95,6 +95,9 @@ func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig 
 		if len(opt.KeyPairs) == 4 {
 			config.KeyPairs = opt.KeyPairs
 		}
+		if !opt.TimeStamp.IsZero() {
+			config.TimeStamp = opt.TimeStamp
+		}
 	}
 	configureStore()
 	if db != nil {
