@@ -93,7 +93,7 @@ type Config struct {
 	// Keys get rotated on the first sync cycle after a TimeOut interval -
 	// new tokens use the new keys; existing tokens continue to use the old keys.
 	KeyPairs [][]byte
-	
+
 	// TimeStamp is when the latest key pair was generated.
 	TimeStamp time.Time
 }
@@ -126,7 +126,8 @@ func configureStore() {
 // DB is the interface to implement for syncing the configuration parameters.
 //
 // Syncing is executed every config.SyncInterval. If parameter values are
-// changed, the new values get synced to all servers that run the application.
+// changed in the database, the new values get synced to all servers that run
+// the application.
 type DB interface {
 
 	// Fetch fetches a Config instance from the database.
