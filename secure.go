@@ -138,9 +138,9 @@ type DB interface {
 	// Fetch fetches a Config instance from the database.
 	Fetch() *Config
 
-	// Upsert inserts a Config instance into the database on Configue(), if
-	// none is present at that time, and updates the KeyPairs and TimeStamp
-	// values on key rotation time.
+	// Upsert inserts a Config instance into the database if none is present
+	// on Configure(). Upsert updates the KeyPairs and TimeStamp values on key
+	// rotation time.
 	Upsert(*Config)
 }
 
@@ -149,7 +149,9 @@ type DB interface {
 // that was created with an old password)
 //
 // src is the data from the token.
+//
 // dst is the fresh data to replace the token data.
+//
 // valid is whether the old data was good enough to keep the token.
 //
 // Default implementation always returns the token data as is, and true.
@@ -162,10 +164,13 @@ var validate = func(src interface{}) (dst interface{}, valid bool) {
 // Configure configures the package and must be called once before use.
 //
 // record is an instance of the type of the data to be stored in the token
+//
 // db is the DB implementation to sync the configuration parameters, or nil, in
 // which case keys will not be rotated.
+//
 // validate is the function that regularly verifies the token data, or nil, which
 // would pose a significant security risk.
+//
 // optionalConfig is the Config instance to start with, or nil to use the one in
 // the db or the default.
 func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
@@ -280,6 +285,7 @@ func accountCurrent(session *sessions.Session, w http.ResponseWriter, r *http.Re
 }
 
 // Authentication returns the data that was stored in the token by LogIn().
+//
 // Returns nil if the token is missing, the session has timed out, or the token
 // data is no longer valid according to the Validate function.
 // Every config.SyncInterval, the token data is refreshed through the Validate
