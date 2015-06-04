@@ -27,6 +27,7 @@ So you could have:
 	)
 	router.GET("/", middleware.IfSecureHandle(HomeLoggedIn, HomeLoggedOut))
 	router.POST("/orders", middleware.SecureHandle(NewOrder))
+	
 	func NewOrder(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		auth := secure.Authentication(w, r)
 		...
