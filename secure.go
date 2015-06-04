@@ -65,10 +65,8 @@ const (
 	returnField    = "eb8cacdd-d65f-441e-a63d-e4da69c2badc"
 )
 
-/*
-Config holds the package's configuration parameters.
-Can be synced with an external database, through the DB interface.
-*/
+// Config holds the package's configuration parameters.
+// Can be synced with an external database, through the DB interface.
 type Config struct {
 	// LogInPath is the URL where Challenge() redirects to.
 	// Default value is "/session".
@@ -119,41 +117,35 @@ func configureStore() {
 	}
 }
 
-/*
-DB is the interface to implement for syncing the configuration parameters.
-Syncing is executed every config.SyncInterval. If parameter values are
-changed, the new values get synced to all servers that run the application.
-*/
+// DB is the interface to implement for syncing the configuration parameters.
+// Syncing is executed every config.SyncInterval. If parameter values are
+// changed, the new values get synced to all servers that run the application.
 type DB interface {
 	Fetch() *Config
 	Upsert(*Config)
 }
 
-/*
-Validate is used every SyncInterval to have the application test whether
-the token data is still valid (e.g. to prevent continued access with a token
-that was created with an old password)
--src- is the data from the token.
--dst- is the fresh data to replace the token data.
--valid- is whether the old data was good enough to keep the token.
-Default implementation always returns the token data as is, and true.
-*/
+// Validate is used every SyncInterval to have the application test whether
+// the token data is still valid (e.g. to prevent continued access with a token
+// that was created with an old password)
+// src is the data from the token.
+// dst is the fresh data to replace the token data.
+// valid is whether the old data was good enough to keep the token.
+// Default implementation always returns the token data as is, and true.
 type Validate func(src interface{}) (dst interface{}, valid bool)
 
 var validate = func(src interface{}) (dst interface{}, valid bool) {
 	return src, true
 }
 
-/*
-Configure configures the package and must be called once before use.
-record is an instance of the type of the data to be stored in the token
-db is the DB implementation to sync the configuration parameters, or nil, in
-which case keys will not be rotated.
-validate is the function that regularly verifies the token data, or nil, which
-would pose a significant security risk.
-optionalConfig is the Config instance to start with, or nil to use the one in
-the db or the default.
-*/
+// Configure configures the package and must be called once before use.
+// record is an instance of the type of the data to be stored in the token
+// db is the DB implementation to sync the configuration parameters, or nil, in
+// which case keys will not be rotated.
+// validate is the function that regularly verifies the token data, or nil, which
+// would pose a significant security risk.
+// optionalConfig is the Config instance to start with, or nil to use the one in
+// the db or the default.
 func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
 	gob.Register(record)
 	gob.Register(time.Now())
@@ -220,10 +212,8 @@ func getToken(r *http.Request) (session *sessions.Session) {
 	return
 }
 
-/*
-LogIn creates the token and sets the cookie.
-record is the data to store in the token, as returned by Authentication()
-*/
+// LogIn creates the token and sets the cookie.
+// record is the data to store in the token, as returned by Authentication()
 func LogIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
 	session := getToken(r)
 	if session.Values[createdField] == nil {
@@ -266,13 +256,11 @@ func accountCurrent(session *sessions.Session, w http.ResponseWriter, r *http.Re
 	return
 }
 
-/*
-Authentication returns the data that was stored in the token by LogIn().
-Returns nil if the token is missing, the session has timed out, or the token
-data is no longer valid according to the Validate function.
-Every config.SyncInterval, the token data is refreshed through the Validate
-function.
-*/
+// Authentication returns the data that was stored in the token by LogIn().
+// Returns nil if the token is missing, the session has timed out, or the token
+// data is no longer valid according to the Validate function.
+// Every config.SyncInterval, the token data is refreshed through the Validate
+// function.
 func Authentication(w http.ResponseWriter, r *http.Request) (record interface{}) {
 	session := getToken(r)
 	if !session.IsNew && sessionCurrent(session) && accountCurrent(session, w, r) {
@@ -289,9 +277,7 @@ func clearToken(r *http.Request) (session *sessions.Session) {
 	return
 }
 
-/*
-Challenge clears the token data and redirects to config.LogInPath.
-*/
+// Challenge clears the token data and redirects to config.LogInPath.
 func Challenge(w http.ResponseWriter, r *http.Request) {
 	session := clearToken(r)
 	session.Values[returnField] = r.URL.Path
@@ -299,9 +285,7 @@ func Challenge(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
 }
 
-/*
-LogOut deletes the cookie and redirects to config.LogOutPath.
-*/
+// LogOut deletes the cookie and redirects to config.LogOutPath.
 func LogOut(w http.ResponseWriter, r *http.Request, redirect bool) {
 	session := clearToken(r)
 	session.Options = &sessions.Options{
