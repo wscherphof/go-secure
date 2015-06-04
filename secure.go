@@ -128,9 +128,11 @@ type DB interface {
 // Validate is used every SyncInterval to have the application test whether
 // the token data is still valid (e.g. to prevent continued access with a token
 // that was created with an old password)
+//
 // src is the data from the token.
 // dst is the fresh data to replace the token data.
 // valid is whether the old data was good enough to keep the token.
+//
 // Default implementation always returns the token data as is, and true.
 type Validate func(src interface{}) (dst interface{}, valid bool)
 
