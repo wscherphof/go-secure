@@ -27,7 +27,7 @@ So you could have:
 	)
 	router.GET("/", middleware.IfSecureHandle(HomeLoggedIn, HomeLoggedOut))
 	router.POST("/orders", middleware.SecureHandle(NewOrder))
-	
+
 	func NewOrder(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		auth := secure.Authentication(w, r)
 		...
@@ -49,8 +49,12 @@ import (
 )
 
 var (
+
+	// ErrTokenNotSaved is returned by LogIn() if it couldn't set the cookie.
 	ErrTokenNotSaved = errors.New("secure: failed to save the session token")
-	ErrNoTLS         = errors.New("secure: logging in requires an encrypted conection")
+
+	// ErrNoTLS is returned by LogIn() if the connection isn't encrypted (https)
+	ErrNoTLS = errors.New("secure: logging in requires an encrypted conection")
 )
 
 const (
