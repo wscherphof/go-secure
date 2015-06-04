@@ -68,26 +68,32 @@ const (
 // Config holds the package's configuration parameters.
 // Can be synced with an external database, through the DB interface.
 type Config struct {
+
 	// LogInPath is the URL where Challenge() redirects to.
 	// Default value is "/session".
 	LogInPath string
+
 	// LogOutPath is the URL where LogOut() redirects to.
 	// Default value is "/".
 	LogOutPath string
+
 	// TimeOut is when a token expires (time after LogIn())
 	// Default value is 6 * 30 days.
 	TimeOut time.Duration
+
 	// SyncInterval is how often the configurations is synced with an external
 	// database, and how often the token data is offered to the application
 	// to revalidate through the Validate function.
 	// Default value is 5 minutes.
 	SyncInterval time.Duration
+
 	// KeyPairs are 4 32-long byte arrays (two pairs of an authentication
 	// key and an encryption key); the 2nd pair is used for key rotation.
 	// Default value is newly generated keys.
 	// Keys get rotated on the first sync cycle after a TimeOut interval -
 	// new tokens use the new keys; existing tokens continue to use the old keys.
 	KeyPairs [][]byte
+	
 	// TimeStamp is when the latest key pair was generated.
 	TimeStamp time.Time
 }
@@ -118,10 +124,17 @@ func configureStore() {
 }
 
 // DB is the interface to implement for syncing the configuration parameters.
+//
 // Syncing is executed every config.SyncInterval. If parameter values are
 // changed, the new values get synced to all servers that run the application.
 type DB interface {
+
+	// Fetch fetches a Config instance from the database.
 	Fetch() *Config
+
+	// Upsert inserts a Config instance into the database on Configue(), if
+	// none is present at that time, and updates the KeyPairs and TimeStamp
+	// values on key rotation time.
 	Upsert(*Config)
 }
 
@@ -141,6 +154,7 @@ var validate = func(src interface{}) (dst interface{}, valid bool) {
 }
 
 // Configure configures the package and must be called once before use.
+//
 // record is an instance of the type of the data to be stored in the token
 // db is the DB implementation to sync the configuration parameters, or nil, in
 // which case keys will not be rotated.
@@ -215,6 +229,7 @@ func getToken(r *http.Request) (session *sessions.Session) {
 }
 
 // LogIn creates the token and sets the cookie.
+//
 // record is the data to store in the token, as returned by Authentication()
 func LogIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
 	session := getToken(r)
