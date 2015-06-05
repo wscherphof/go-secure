@@ -14,7 +14,7 @@ If the challenge is fullfilled, call LogIn to create a new token. To delete the
 token, call LogOut().
 
 The httprouter subpackage provides for julienschmidt's httprouter a SecureHandle
-to enforce a valid session for a specific application route, and an 
+to enforce a valid session for a specific application route, and an
 IfSecureHandle to provide separate handle alternatives for requests with or
 without a valid token.
 
@@ -136,12 +136,12 @@ func configureStore() {
 type DB interface {
 
 	// Fetch fetches a Config instance from the database.
-	Fetch() *Config
+	Fetch(dst *Config) error
 
 	// Upsert inserts a Config instance into the database if none is present
 	// on Configure(). Upsert updates the KeyPairs and TimeStamp values on key
 	// rotation time.
-	Upsert(*Config)
+	Upsert(src *Config) error
 }
 
 // Validate is used every SyncInterval to have the application test whether
@@ -214,7 +214,8 @@ func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig 
 }
 
 func sync(db DB) {
-	if dbConfig := db.Fetch(); dbConfig == nil {
+	dbConfig := new(Config)
+	if err := db.Fetch(dbConfig); err != nil {
 		// Upload current (default) config to DB if there wasn't any
 		db.Upsert(config)
 	} else {
@@ -222,15 +223,19 @@ func sync(db DB) {
 		config = dbConfig
 		// Rotate keys if timed out
 		if time.Now().Sub(config.TimeStamp) > config.TimeOut {
-			config.KeyPairs = [][]byte{
+			rotateConfig := new(Config)
+			*rotateConfig = *config
+			rotateConfig.KeyPairs = [][]byte{
 				securecookie.GenerateRandomKey(authKeyLen),
 				securecookie.GenerateRandomKey(encrKeyLen),
 				config.KeyPairs[0],
 				config.KeyPairs[1],
 			}
-			config.TimeStamp = time.Now()
-			db.Upsert(config)
-			log.Println("INFO: Security keys rotated")
+			rotateConfig.TimeStamp = time.Now()
+			if err := db.Upsert(rotateConfig); err != nil {
+				config = rotateConfig
+				log.Println("INFO: Security keys rotated")
+			}
 		}
 		configureStore()
 	}
