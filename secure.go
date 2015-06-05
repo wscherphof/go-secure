@@ -86,9 +86,8 @@ type Config struct {
 	// Default value is 6 * 30 days.
 	TimeOut time.Duration
 
-	// SyncInterval is how often the configurations is synced with an external
-	// database, and how often the token data is offered to the application
-	// to revalidate through the Validate function.
+	// SyncInterval is how often the configuration is synced with an external
+	// database, and how often the token data is offered to the Validate function.
 	// Default value is 5 minutes.
 	SyncInterval time.Duration
 
@@ -139,22 +138,23 @@ type DB interface {
 	Fetch(dst *Config) error
 
 	// Upsert inserts a Config instance into the database if none is present
-	// on Configure(). Upsert updates the KeyPairs and TimeStamp values on key
-	// rotation time.
+	// on Configure().
+	// Upsert updates the KeyPairs and TimeStamp values on key rotation time.
 	Upsert(src *Config) error
 }
 
-// Validate is used every SyncInterval to have the application test whether
+// Validate is called every SyncInterval to have the application test whether
 // the token data is still valid (e.g. to prevent continued access with a token
 // that was created with an old password)
 //
 // src is the data from the token.
 //
-// dst is the fresh data to replace the token data.
+// dst is the fresh data to replace the token data with.
 //
 // valid is whether the old data was good enough to keep the token.
 //
-// Default implementation always returns the token data as is, and true.
+// Default implementation always returns the token data as is, and true, which
+// is significantly insecure.
 type Validate func(src interface{}) (dst interface{}, valid bool)
 
 var validate = func(src interface{}) (dst interface{}, valid bool) {
@@ -321,7 +321,8 @@ func Challenge(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
 }
 
-// LogOut deletes the cookie and redirects to config.LogOutPath.
+// LogOut deletes the cookie, and redirects to config.LogOutPath if redirect is
+// true.
 func LogOut(w http.ResponseWriter, r *http.Request, redirect bool) {
 	session := clearToken(r)
 	session.Options = &sessions.Options{
