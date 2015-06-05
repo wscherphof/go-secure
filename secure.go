@@ -13,25 +13,22 @@ data from the token; if that's nil, call Challenge() to redirect to a login page
 If the challenge is fullfilled, call LogIn to create a new token. To delete the
 token, call LogOut().
 
-The httprouter subpackage provides for julienschmidt's httprouter a SecureHandle
-to enforce a valid token for a specific application route, and an
-IfSecureHandle to provide separate handle alternatives for requests with or
-without a valid token.
+The subpackages provide middleware: a SecureHandler to enforce a valid token,
+and an IfSecureHandler to provide separate handler alternatives for requests
+with or without a valid token. Middleware is included for http.ServeMux, and
+github.com/julienschmidt/httprouter
 
 So you could have:
 	import (
-		"github.com/julienschmidt/httprouter"
 		"github.com/wscherphof/secure"
-		middleware "github.com/wscherphof/secure/httprouter"
+		middleware "github.com/wscherphof/secure/http"
 		"net/http"
 	)
-	router.GET("/", middleware.IfSecureHandle(HomeLoggedIn, HomeLoggedOut))
-	router.POST("/orders", middleware.SecureHandle(NewOrder))
-
-	func NewOrder(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	http.Handle("/", middleware.IfSecureHandle(HomeLoggedIn, HomeLoggedOut))
+	http.Handle("/orders", middleware.SecureHandle(http.HandleFunc(func (w http.ResponseWriter, r *http.Request) {
 		auth := secure.Authentication(w, r)
 		...
-	}
+	})))
 
 You'll probably want to wrap Authentication() in a function that converts the
 interface{} result to the type that you use for the token data.
