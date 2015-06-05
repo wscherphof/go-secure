@@ -25,10 +25,10 @@ So you could have:
 		"net/http"
 	)
 	http.Handle("/", middleware.IfSecureHandler(HomeLoggedIn, HomeLoggedOut))
-	http.Handle("/orders", middleware.SecureHandler(http.HandleFunc(func (w http.ResponseWriter, r *http.Request) {
+	http.Handle("/orders", middleware.SecureHandler(http.HandlerFunc(w http.ResponseWriter, r *http.Request) {
 		auth := secure.Authentication(w, r)
 		...
-	})))
+	}))
 
 You'll probably want to wrap Authentication() in a function that converts the
 interface{} result to the type that you use for the token data.
