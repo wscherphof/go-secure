@@ -14,7 +14,7 @@ If the challenge is fullfilled, call LogIn to create a new token. To delete the
 token, call LogOut().
 
 The httprouter subpackage provides for julienschmidt's httprouter a SecureHandle
-to enforce a valid session for a specific application route, and an
+to enforce a valid token for a specific application route, and an
 IfSecureHandle to provide separate handle alternatives for requests with or
 without a valid token.
 
