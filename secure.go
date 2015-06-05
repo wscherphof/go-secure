@@ -24,8 +24,8 @@ So you could have:
 		middleware "github.com/wscherphof/secure/http"
 		"net/http"
 	)
-	http.Handle("/", middleware.IfSecureHandle(HomeLoggedIn, HomeLoggedOut))
-	http.Handle("/orders", middleware.SecureHandle(http.HandleFunc(func (w http.ResponseWriter, r *http.Request) {
+	http.Handle("/", middleware.IfSecureHandler(HomeLoggedIn, HomeLoggedOut))
+	http.Handle("/orders", middleware.SecureHandler(http.HandleFunc(func (w http.ResponseWriter, r *http.Request) {
 		auth := secure.Authentication(w, r)
 		...
 	})))
