@@ -163,7 +163,9 @@ var validate = func(src interface{}) (dst interface{}, valid bool) {
 
 // Configure configures the package and must be called once before use.
 //
-// record is an instance of the type of the data to be stored in the token
+// record is an arbitrary (can be empty) instance of the type of the data to be
+// stored in the token. It's needed to get registered in the serialisation
+// package used (encoding/gob).
 //
 // db is the DB implementation to sync the configuration parameters, or nil, in
 // which case keys will not be rotated.
