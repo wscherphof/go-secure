@@ -13,10 +13,10 @@ data from the token; if that's nil, call Challenge() to redirect to a login page
 If the challenge is fullfilled, call LogIn to create a new token. To delete the
 token, call LogOut().
 
-The secure/middleware package for github.com/julienschmidt/httprouter a
-SecureHandle to enforce a valid session for a specific application route, and
-an IfSecureHandle to provide separate handle alternatives for requests with
-or without a valid token.
+The httprouter subpackage provides for julienschmidt's httprouter a SecureHandle
+to enforce a valid session for a specific application route, and an 
+IfSecureHandle to provide separate handle alternatives for requests with or
+without a valid token.
 
 So you could have:
 	import (
