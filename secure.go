@@ -1,20 +1,22 @@
 /*
-Package secure manages client side session tokens for stateless web applications.
+Package secure manages client side session tokens for stateless web
+applications.
 
-Tokens are stored as an http cookie. An encrypted connection (https) is required.
-Call Configure() once to provide the information for the package to operate,
-including the type of data that will be stored in the token.
+Tokens are stored as an http cookie. An encrypted connection (https) is
+required.
 
-The actual configuration parameters are stored in a Config type struct,
-that can be synced with an external database, through the DB interface.
+Call `Configure()` once to provide the information for the package to operate,
+including the type of data that will be stored in the token. The actual
+configuration parameters are stored in a Config type struct, which can be
+synced with an external database, through the DB interface.
 
-Once configured, the application can call Authentication() to retrieve the
-data from the token. It will redirect to a login page if no valid token is
-present (unless the `optional` argument was `true`)
-LogIn() creates a new token. To delete the token, call LogOut(). Update()
-updates the token data.
+Once configured, call 'Authentication()' to retrieve the data from the token.
+It will redirect to a login page if no valid token is present (unless the
+`optional` argument was `true`). 'LogIn()' creates a new token, and redirects
+back to the page that required the authentication.
+To delete the token, call 'LogOut()'. 'Update()' updates the token data.
 
-The subpackages provide middleware: IfSecureHandler registers separate handler
+The subpackages provide middleware: 'IfSecureHandler' registers separate handler
 alternatives for requests with or without a valid token. Middleware is included
 for http.ServeMux, and github.com/julienschmidt/httprouter
 
@@ -26,8 +28,8 @@ So you could have:
 	)
 	http.Handle("/", middleware.IfSecureHandler(HomeLoggedIn, HomeLoggedOut))
 
-You'll probably want to wrap Authentication() in a function that converts the
-interface{} result to the type that you use for the token data.
+You'll probably want to wrap 'Authentication()' in a function that converts the
+'interface{}' result to the type that you use for the token data.
 */
 package secure
 
@@ -260,14 +262,15 @@ func logIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect 
 	return
 }
 
-// LogIn creates the token and sets the cookie.
+// LogIn creates the token and sets the cookie. It redirects back to the path
+// where Authenticate() was called.
 //
 // record is the data to store in the token, as returned by Authentication()
 func LogIn(w http.ResponseWriter, r *http.Request, record interface{}) (err error) {
 	return logIn(w, r, record, true)
 }
 
-// Update updates the token data.
+// Update updates the data in the token.
 func Update(w http.ResponseWriter, r *http.Request, record interface{}) (err error) {
 	return logIn(w, r, record, false)
 }
