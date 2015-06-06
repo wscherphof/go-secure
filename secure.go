@@ -132,9 +132,9 @@ type DB interface {
 	Upsert(src *Config) error
 }
 
-// Validate is called to have the application test whether the token data is
-// still valid (e.g. to prevent continued access with a token that was created
-// with an old password)
+// Validate is the type of the function passed to Configure(), that gets called
+// to have the application test whether the token data is still valid (e.g. to
+// prevent continued access with a token that was created with an old password)
 //
 // 'src' is the authentication data from the token.
 //
