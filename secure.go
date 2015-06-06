@@ -157,9 +157,10 @@ var validate = func(src interface{}) (dst interface{}, valid bool) {
 // Configure configures the package and must be called once before calling any
 // other function in this package.
 //
-// 'record' is an arbitrary (can be empty) instance of the type of the data that
-// will be passed to Ligin() to store in the token. It's needed to get its type
-// registered with the serialisation package used (encoding/gob).
+// 'record' is an arbitrary (can be empty) instance of the type of the
+// authentication data that will be passed to Login() to store in the token.
+// It's needed to get its type registered with the serialisation package used
+// (encoding/gob).
 //
 // 'db' is the implementation of the DB interface to sync the configuration
 // parameters, or nil, in which case keys will not be rotated.
