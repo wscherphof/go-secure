@@ -2,21 +2,21 @@
 Package secure manages client side session tokens for stateless web applications.
 
 Tokens are stored as an http cookie. An encrypted connection (https) is required.
-Call Configuere() once to provide the information for the package to operate,
+Call Configure() once to provide the information for the package to operate,
 including the type of data that will be stored in the token.
 
 The actual configuration parameters are stored in a Config type struct,
 that can be synced with an external database, through the DB interface.
 
 Once configured, the application can call Authentication() to retrieve the
-data from the token; if that's nil, call Challenge() to redirect to a login page.
-If the challenge is fullfilled, call LogIn to create a new token. To delete the
-token, call LogOut().
+data from the token. It will redirect to a login page if no valid token is
+present (unless the `optional` argument was `true`)
+LogIn() creates a new token. To delete the token, call LogOut(). Update()
+updates the token data.
 
-The subpackages provide middleware: a SecureHandler to enforce a valid token,
-and an IfSecureHandler to provide separate handler alternatives for requests
-with or without a valid token. Middleware is included for http.ServeMux, and
-github.com/julienschmidt/httprouter
+The subpackages provide middleware: IfSecureHandler registers separate handler
+alternatives for requests with or without a valid token. Middleware is included
+for http.ServeMux, and github.com/julienschmidt/httprouter
 
 So you could have:
 	import (
@@ -25,10 +25,6 @@ So you could have:
 		"net/http"
 	)
 	http.Handle("/", middleware.IfSecureHandler(HomeLoggedIn, HomeLoggedOut))
-	http.Handle("/orders", middleware.SecureHandler(http.HandlerFunc(w http.ResponseWriter, r *http.Request) {
-		auth := secure.Authentication(w, r)
-		...
-	}))
 
 You'll probably want to wrap Authentication() in a function that converts the
 interface{} result to the type that you use for the token data.
@@ -160,17 +156,17 @@ var validate = func(src interface{}) (dst interface{}, valid bool) {
 
 // Configure configures the package and must be called once before use.
 //
-// record is an arbitrary (can be empty) instance of the type of the data to be
+// `record` is an arbitrary (can be empty) instance of the type of the data to be
 // stored in the token. It's needed to get registered in the serialisation
 // package used (encoding/gob).
 //
-// db is the DB implementation to sync the configuration parameters, or nil, in
+// `db` is the DB implementation to sync the configuration parameters, or nil, in
 // which case keys will not be rotated.
 //
-// validate is the function that regularly verifies the token data, or nil, which
+// `validate` is the function that regularly verifies the token data, or nil, which
 // would pose a significant security risk.
 //
-// optionalConfig is the Config instance to start with, or nil to use the one in
+// `optionalConfig` is the Config instance to start with, or nil to use the one in
 // the db or the default.
 func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
 	gob.Register(record)
@@ -243,10 +239,7 @@ func getToken(r *http.Request) (session *sessions.Session) {
 	return
 }
 
-// LogIn creates the token and sets the cookie.
-//
-// record is the data to store in the token, as returned by Authentication()
-func LogIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
+func logIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
 	session := getToken(r)
 	if session.Values[createdField] == nil {
 		session.Values[createdField] = time.Now()
@@ -265,6 +258,18 @@ func LogIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect 
 		http.Redirect(w, r, path.(string), http.StatusSeeOther)
 	}
 	return
+}
+
+// LogIn creates the token and sets the cookie.
+//
+// record is the data to store in the token, as returned by Authentication()
+func LogIn(w http.ResponseWriter, r *http.Request, record interface{}) (err error) {
+	return logIn(w, r, record, true)
+}
+
+// Update updates the token data.
+func Update(w http.ResponseWriter, r *http.Request, record interface{}) (err error) {
+	return logIn(w, r, record, false)
 }
 
 func sessionCurrent(session *sessions.Session) (current bool) {
@@ -294,10 +299,22 @@ func accountCurrent(session *sessions.Session, w http.ResponseWriter, r *http.Re
 // data is no longer valid according to the Validate function.
 // Every config.SyncInterval, the token data is refreshed through the Validate
 // function.
-func Authentication(w http.ResponseWriter, r *http.Request) (record interface{}) {
+//
+// Unless `optional` is set to `true`, a redirect to config.LogInPath will be
+// executed if no valid token was found.
+func Authentication(w http.ResponseWriter, r *http.Request, optional ...bool) (record interface{}) {
+	enforce := true
+	if len(optional) > 0 {
+		enforce = !optional[0]
+	}
 	session := getToken(r)
 	if !session.IsNew && sessionCurrent(session) && accountCurrent(session, w, r) {
 		record = session.Values[recordField]
+	} else if enforce {
+		session = clearToken(r)
+		session.Values[returnField] = r.URL.Path
+		_ = session.Save(r, w)
+		http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
 	}
 	return
 }
@@ -308,14 +325,6 @@ func clearToken(r *http.Request) (session *sessions.Session) {
 	delete(session.Values, createdField)
 	delete(session.Values, validatedField)
 	return
-}
-
-// Challenge clears the token data and redirects to config.LogInPath.
-func Challenge(w http.ResponseWriter, r *http.Request) {
-	session := clearToken(r)
-	session.Values[returnField] = r.URL.Path
-	_ = session.Save(r, w)
-	http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
 }
 
 // LogOut deletes the cookie, and redirects to config.LogOutPath if redirect is
