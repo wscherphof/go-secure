@@ -168,11 +168,11 @@ var validate = func(src interface{}) (dst interface{}, valid bool) {
 // 'validate' is the function that regularly verifies the token data, or nil,
 // which would pose a significant security risk.
 //
-// 'optionalConfig' is the Config instance to start with, or nil to use the one
-// in the db or the default.
+// 'optionalConfig' is the Config instance to start with. If omitted, the config
+// from the db or the default config is used.
 //
-// For early experiments, use this simplest form:
-// 	Configure("", nil, nil)
+// Early experiments can skip the call to Configure(), and use a string or an
+// int for the authentication data.
 func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
 	gob.Register(record)
 	gob.Register(time.Now())
