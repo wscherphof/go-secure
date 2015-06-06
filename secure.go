@@ -6,16 +6,17 @@ Tokens are stored as an http cookie. An encrypted connection (https) is
 required.
 
 Call 'Configure()' once to provide the information for the package to operate,
-including the type of data that will be stored in the token. The actual
+including the type of the authentication data that will be used. The actual
 configuration parameters are stored in a 'Config' type struct, which can be
 synced with an external database, through the 'DB' interface.
 
 Once configured, call 'Authentication()' to retrieve the data from the token.
 It will redirect to a login page if no valid token is present (unless the
-`optional` argument was `true`). 'LogIn()' creates a new token, stores the
+'optional' argument was 'true'). 'LogIn()' creates a new token, stores the
 provided data in it, and redirects back to the page that required the
 authentication.
-'Update()' updates the token data. To delete the token, call 'LogOut()'.
+'Update()' updates the authentication data in the current token. 'LogOut()'
+deletes the token cookie.
 
 You'll probably want to wrap 'Authentication()' in a function that converts the
 'interface{}' result to the type that you use for the token data.
@@ -301,10 +302,8 @@ func accountCurrent(session *sessions.Session, w http.ResponseWriter, r *http.Re
 // Authentication returns the data that was stored in the token on LogIn().
 //
 // Returns nil if the token is missing, the session has timed out, or the token
-// data is invalidated though the Validate function.
-//
-// When no valid token was present, the request gets redirected to
-// config.LogInPath, unless 'optional' is set to 'true'
+// data is invalidated though the Validate function. The request then gets
+// redirected to config.LogInPath, unless 'optional' is set to 'true'
 func Authentication(w http.ResponseWriter, r *http.Request, optional ...bool) (record interface{}) {
 	enforce := true
 	if len(optional) > 0 {
