@@ -5,28 +5,17 @@ applications.
 Tokens are stored as an http cookie. An encrypted connection (https) is
 required.
 
-Call `Configure()` once to provide the information for the package to operate,
+Call 'Configure()' once to provide the information for the package to operate,
 including the type of data that will be stored in the token. The actual
-configuration parameters are stored in a Config type struct, which can be
-synced with an external database, through the DB interface.
+configuration parameters are stored in a 'Config' type struct, which can be
+synced with an external database, through the 'DB' interface.
 
 Once configured, call 'Authentication()' to retrieve the data from the token.
 It will redirect to a login page if no valid token is present (unless the
-`optional` argument was `true`). 'LogIn()' creates a new token, and redirects
-back to the page that required the authentication.
-To delete the token, call 'LogOut()'. 'Update()' updates the token data.
-
-The subpackages provide middleware: 'IfSecureHandler' registers separate handler
-alternatives for requests with or without a valid token. Middleware is included
-for http.ServeMux, and github.com/julienschmidt/httprouter
-
-So you could have:
-	import (
-		"github.com/wscherphof/secure"
-		middleware "github.com/wscherphof/secure/http"
-		"net/http"
-	)
-	http.Handle("/", middleware.IfSecureHandler(HomeLoggedIn, HomeLoggedOut))
+`optional` argument was `true`). 'LogIn()' creates a new token, stores the
+provided data in it, and redirects back to the page that required the
+authentication.
+'Update()' updates the token data. To delete the token, call 'LogOut()'.
 
 You'll probably want to wrap 'Authentication()' in a function that converts the
 'interface{}' result to the type that you use for the token data.
@@ -48,7 +37,8 @@ var (
 	// ErrTokenNotSaved is returned by LogIn() if it couldn't set the cookie.
 	ErrTokenNotSaved = errors.New("secure: failed to save the session token")
 
-	// ErrNoTLS is returned by LogIn() if the connection isn't encrypted (https)
+	// ErrNoTLS is returned by LogIn() if the connection isn't encrypted
+	// (https)
 	ErrNoTLS = errors.New("secure: logging in requires an encrypted conection")
 )
 
@@ -69,7 +59,8 @@ const (
 // Can be synced with an external database, through the DB interface.
 type Config struct {
 
-	// LogInPath is the URL where Challenge() redirects to.
+	// LogInPath is the URL where Authentication() redirects to; a log in form
+	// should be served here.
 	// Default value is "/session".
 	LogInPath string
 
@@ -82,15 +73,17 @@ type Config struct {
 	TimeOut time.Duration
 
 	// SyncInterval is how often the configuration is synced with an external
-	// database, and how often the token data is offered to the Validate function.
+	// database. SyncInterval also determines whether it's time to have the
+	// token data checked by the Validate function.
 	// Default value is 5 minutes.
 	SyncInterval time.Duration
 
-	// KeyPairs are 4 32-long byte arrays (two pairs of an authentication
-	// key and an encryption key); the 2nd pair is used for key rotation.
+	// KeyPairs are 4 32-long byte arrays (two pairs of an authentication key
+	// and an encryption key); the 2nd pair is used for key rotation.
 	// Default value is newly generated keys.
 	// Keys get rotated on the first sync cycle after a TimeOut interval -
-	// new tokens use the new keys; existing tokens continue to use the old keys.
+	// new tokens use the new keys; existing tokens continue to use the old
+	// keys.
 	KeyPairs [][]byte
 
 	// TimeStamp is when the latest key pair was generated.
@@ -133,43 +126,51 @@ type DB interface {
 	Fetch(dst *Config) error
 
 	// Upsert inserts a Config instance into the database if none is present
-	// on Configure().
-	// Upsert updates the KeyPairs and TimeStamp values on key rotation time.
+	// on Configure(). Upsert updates the KeyPairs and TimeStamp values on key
+	// rotation time.
 	Upsert(src *Config) error
 }
 
-// Validate is called every SyncInterval to have the application test whether
-// the token data is still valid (e.g. to prevent continued access with a token
-// that was created with an old password)
+// Validate is called to have the application test whether the token data is
+// still valid (e.g. to prevent continued access with a token that was created
+// with an old password)
 //
-// src is the data from the token.
+// 'src' is the authentication data from the token.
 //
-// dst is the fresh data to replace the token data with.
+// 'dst' is the fresh authentication data to replace the token data with.
 //
-// valid is whether the old data was good enough to keep the token.
+// 'valid' is whether the old data was good enough to keep the current token.
 //
 // Default implementation always returns the token data as is, and true, which
 // is significantly insecure.
+//
+// Each successful validation stores a timestamp in
+// the cookie. Validate is called on Authentication, if the time since the
+// validation timestamp > config.SyncInterval
 type Validate func(src interface{}) (dst interface{}, valid bool)
 
 var validate = func(src interface{}) (dst interface{}, valid bool) {
 	return src, true
 }
 
-// Configure configures the package and must be called once before use.
+// Configure configures the package and must be called once before calling any
+// other function in this package.
 //
-// `record` is an arbitrary (can be empty) instance of the type of the data to be
-// stored in the token. It's needed to get registered in the serialisation
-// package used (encoding/gob).
+// 'record' is an arbitrary (can be empty) instance of the type of the data that
+// will be passed to Ligin() to store in the token. It's needed to get its type
+// registered with the serialisation package used (encoding/gob).
 //
-// `db` is the DB implementation to sync the configuration parameters, or nil, in
-// which case keys will not be rotated.
+// 'db' is the implementation of the DB interface to sync the configuration
+// parameters, or nil, in which case keys will not be rotated.
 //
-// `validate` is the function that regularly verifies the token data, or nil, which
-// would pose a significant security risk.
+// 'validate' is the function that regularly verifies the token data, or nil,
+// which would pose a significant security risk.
 //
-// `optionalConfig` is the Config instance to start with, or nil to use the one in
-// the db or the default.
+// 'optionalConfig' is the Config instance to start with, or nil to use the one
+// in the db or the default.
+//
+// For early experiments, use this simplest form:
+// 	Configure("", nil, nil)
 func Configure(record interface{}, db DB, validateFunc Validate, optionalConfig ...*Config) {
 	gob.Register(record)
 	gob.Register(time.Now())
@@ -241,7 +242,7 @@ func getToken(r *http.Request) (session *sessions.Session) {
 	return
 }
 
-func logIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
+func create(w http.ResponseWriter, r *http.Request, record interface{}, redirect bool) (err error) {
 	session := getToken(r)
 	if session.Values[createdField] == nil {
 		session.Values[createdField] = time.Now()
@@ -265,14 +266,15 @@ func logIn(w http.ResponseWriter, r *http.Request, record interface{}, redirect 
 // LogIn creates the token and sets the cookie. It redirects back to the path
 // where Authenticate() was called.
 //
-// record is the data to store in the token, as returned by Authentication()
+// 'record' is the authentication data to store in the token, as returned by
+// Authentication()
 func LogIn(w http.ResponseWriter, r *http.Request, record interface{}) (err error) {
-	return logIn(w, r, record, true)
+	return create(w, r, record, true)
 }
 
-// Update updates the data in the token.
+// Update updates the authentication data in the token.
 func Update(w http.ResponseWriter, r *http.Request, record interface{}) (err error) {
-	return logIn(w, r, record, false)
+	return create(w, r, record, false)
 }
 
 func sessionCurrent(session *sessions.Session) (current bool) {
@@ -296,15 +298,13 @@ func accountCurrent(session *sessions.Session, w http.ResponseWriter, r *http.Re
 	return
 }
 
-// Authentication returns the data that was stored in the token by LogIn().
+// Authentication returns the data that was stored in the token on LogIn().
 //
 // Returns nil if the token is missing, the session has timed out, or the token
-// data is no longer valid according to the Validate function.
-// Every config.SyncInterval, the token data is refreshed through the Validate
-// function.
+// data is invalidated though the Validate function.
 //
-// Unless `optional` is set to `true`, a redirect to config.LogInPath will be
-// executed if no valid token was found.
+// When no valid token was present, the request gets redirected to
+// config.LogInPath, unless 'optional' is set to 'true'
 func Authentication(w http.ResponseWriter, r *http.Request, optional ...bool) (record interface{}) {
 	enforce := true
 	if len(optional) > 0 {
@@ -330,8 +330,8 @@ func clearToken(r *http.Request) (session *sessions.Session) {
 	return
 }
 
-// LogOut deletes the cookie, and redirects to config.LogOutPath if redirect is
-// true.
+// LogOut deletes the cookie. If 'redirect' is 'true', the request is redirected
+// to config.LogOutPath.
 func LogOut(w http.ResponseWriter, r *http.Request, redirect bool) {
 	session := clearToken(r)
 	session.Options = &sessions.Options{
