@@ -303,8 +303,9 @@ func accountCurrent(session *sessions.Session, w http.ResponseWriter, r *http.Re
 // Authentication returns the data that was stored in the token on LogIn().
 //
 // Returns nil if the token is missing, the session has timed out, or the token
-// data is invalidated though the Validate function. The request then gets
-// redirected to config.LogInPath, unless 'optional' is set to 'true'
+// data is invalidated though the Validate function. Unless 'optional' is set to
+// 'true', the response then gets status 403 Forbidden, and the browser will
+// redirect to config.LogInPath.
 func Authentication(w http.ResponseWriter, r *http.Request, optional ...bool) (record interface{}) {
 	enforce := true
 	if len(optional) > 0 {
@@ -317,7 +318,20 @@ func Authentication(w http.ResponseWriter, r *http.Request, optional ...bool) (r
 		session = clearToken(r)
 		session.Values[returnField] = r.URL.Path
 		_ = session.Save(r, w)
-		http.Redirect(w, r, config.LogInPath, http.StatusSeeOther)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`<!DOCTYPE html>
+			<html>
+				<head>
+					<meta charset="utf-8">
+					<meta http-equiv="refresh" content="0; url=` + config.LogInPath + `">
+				</head>
+				<body>
+					<p>Forbidden</p>
+					<a href="` + config.LogInPath + `">Log in</a>
+				</body>
+			</html>
+		`))
 	}
 	return
 }
