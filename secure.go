@@ -328,7 +328,7 @@ func Authentication(w http.ResponseWriter, r *http.Request, optional ...bool) (r
 				</head>
 				<body>
 					<h2>Forbidden</h2>
-					<a href="` + config.LogInPath + `">Log in</a>
+					<a id="location" href="` + config.LogInPath + `">Log in</a>
 				</body>
 			</html>
 		`))
