@@ -13,9 +13,8 @@ func RegisterRequestTokenData(data interface{}) {
 	gob.Register(data)
 }
 
-func NewRequestToken(data interface{}) (token RequestToken, err error) {
-	t, e := securecookie.EncodeMulti(requestTokenName, data, requestTokenCodecs...)
-	return RequestToken(t), e
+func NewRequestToken(data interface{}) (token string, err error) {
+	return securecookie.EncodeMulti(requestTokenName, data, requestTokenCodecs...)
 }
 
 func (r RequestToken) Read(dst interface{}) (err error) {
