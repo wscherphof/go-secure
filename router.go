@@ -70,7 +70,6 @@ func (r *SecureRouter) OPTIONS(path string, handle httprouter.Handle) {
 
 func clearHandle(handle httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-		w.Header().Set("X-Csrf-Token", NewFormToken(r).String())
 		handle(w, r, ps)
 		context.Clear(r)
 	}
