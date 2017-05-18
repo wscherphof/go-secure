@@ -245,7 +245,8 @@ func sync() {
 		// Upload current (default) config to DB if there wasn't any
 		db.Upsert(config)
 	} else {
-		for dbConfig.Locked {
+		for i := 1; dbConfig.Locked; i++ {
+			log.Printf("DEBUG: secure config locked %d", i)
 			time.Sleep(50 * time.Millisecond)
 			db.Fetch(dbConfig)
 		}
