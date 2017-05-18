@@ -179,9 +179,9 @@ type DB interface {
 type ValidateCookie func(src interface{}) (dst interface{}, valid bool)
 
 var (
-	db DB
+	db       DB
 	validate ValidateCookie
-	)
+)
 
 // Configure configures the package and must be called once before calling any
 // other function in this package.
