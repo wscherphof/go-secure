@@ -57,7 +57,7 @@ func sessionCurrent(session *sessions.Session) (current bool) {
 
 func accountCurrent(session *sessions.Session, w http.ResponseWriter, r *http.Request) (current bool) {
 	if validated := session.Values[validatedField]; validated == nil {
-	} else if cur := time.Since(validated.(time.Time)) < config.SyncInterval; cur {
+	} else if cur := time.Since(validated.(time.Time)) < config.ValidateTimeOut; cur {
 		current = true
 	} else if record, cur := validate(session.Values[recordField]); cur {
 		session.Values[recordField] = record

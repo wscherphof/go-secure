@@ -2,8 +2,6 @@ package secure
 
 import (
 	"encoding/gob"
-	"github.com/gorilla/securecookie"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -46,24 +44,15 @@ const formTokenName = "4f3a0292-59c5-488a-b3fb-6e503c929331"
 /*
 String returns the encrypted token string.
 */
-func (f *FormToken) String() (s string) {
-	var err error
-	if s, err = securecookie.EncodeMulti(formTokenName, f, formTokenCodecs...); err != nil {
-		log.Panicln("ERROR: encoding form token failed", err)
-	}
-	return
+func (f *FormToken) String() string {
+	return config.FormTokenKeys.Encode(formTokenName, f)
 }
 
 /*
 Parse populates the data fields from an encrypted token string.
 */
-func (f *FormToken) Parse(s string) (err error) {
-	if err = securecookie.DecodeMulti(formTokenName, s, f, formTokenCodecs...); err != nil {
-		for i, e := range err.(securecookie.MultiError) {
-			log.Printf("WARNING: FormToken.Parse: error %d %v", i, e)
-		}
-	}
-	return
+func (f *FormToken) Parse(s string) error {
+	return config.FormTokenKeys.Decode(formTokenName, s, f)
 }
 
 func ip(r *http.Request) string {

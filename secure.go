@@ -72,11 +72,10 @@ type Config struct {
 	// Default value is 6 * 30 days.
 	CookieTimeOut time.Duration
 
-	// SyncInterval is how often the configuration is synced with an external
-	// database. SyncInterval also determines whether it's time to have the
+	// ValidateTimeOut determines whether it's time to have the
 	// cookie data checked by the ValidateCookie function.
 	// Default value is 5 minutes.
-	SyncInterval time.Duration
+	ValidateTimeOut time.Duration
 
 	// CookieKeyPairs are 4 32-long byte arrays (two pairs of an authentication key
 	// and an encryption key); the 2nd pair is used for key rotation.
@@ -89,60 +88,41 @@ type Config struct {
 	// CookieTimeStamp is when the latest cookie key pair was generated.
 	CookieTimeStamp time.Time
 
-	// FormTokenKeyPairs are the rotating key pairs for the form tokens.
-	FormTokenKeyPairs [][]byte
-
-	// FormTokenTimeStamp is when the latest form token key pair was generated.
-	FormTokenTimeStamp time.Time
-
-	Locked bool
-}
-
-func (c *Config) lock() error {
-	c.Locked = true
-	return db.Upsert(c)
-}
-
-func (c *Config) unlock() error {
-	c.Locked = false
-	return db.Upsert(c)
+	FormTokenKeys *Keys
 }
 
 var config = &Config{
 	LogInPath:     "/session",
 	LogOutPath:    "/",
 	CookieTimeOut: 6 * 30 * 24 * time.Hour,
-	SyncInterval:  5 * time.Minute,
+	ValidateTimeOut:  5 * time.Minute,
 	CookieKeyPairs: [][]byte{
+		securecookie.GenerateRandomKey(authKeyLen),
+		securecookie.GenerateRandomKey(encrKeyLen),
 		securecookie.GenerateRandomKey(authKeyLen),
 		securecookie.GenerateRandomKey(encrKeyLen),
 		securecookie.GenerateRandomKey(authKeyLen),
 		securecookie.GenerateRandomKey(encrKeyLen),
 	},
 	CookieTimeStamp: time.Now(),
-	FormTokenKeyPairs: [][]byte{
-		securecookie.GenerateRandomKey(authKeyLen),
-		securecookie.GenerateRandomKey(encrKeyLen),
-		securecookie.GenerateRandomKey(authKeyLen),
-		securecookie.GenerateRandomKey(encrKeyLen),
+	FormTokenKeys: &Keys{
+		KeyPairs: [][]byte{
+			securecookie.GenerateRandomKey(authKeyLen),
+			securecookie.GenerateRandomKey(encrKeyLen),
+			securecookie.GenerateRandomKey(authKeyLen),
+			securecookie.GenerateRandomKey(encrKeyLen),
+			securecookie.GenerateRandomKey(authKeyLen),
+			securecookie.GenerateRandomKey(encrKeyLen),
+		},
+		Start: time.Now(),
+		TimeOut: 5 * time.Minute,
 	},
-	FormTokenTimeStamp: time.Now(),
 }
 
 var (
 	store           *sessions.CookieStore
 	formTokenCodecs []securecookie.Codec
 )
-
-func setKeys() {
-	store = sessions.NewCookieStore(config.CookieKeyPairs...)
-	store.Options = &sessions.Options{
-		MaxAge: int(config.CookieTimeOut / time.Second),
-		Secure: true,
-		Path:   "/",
-	}
-	formTokenCodecs = securecookie.CodecsFromPairs(config.FormTokenKeyPairs...)
-}
 
 // DB is the interface to implement for syncing the configuration parameters.
 //
@@ -212,8 +192,8 @@ func Configure(record interface{}, dbImpl DB, validateFunc ValidateCookie, optio
 		if opt.CookieTimeOut > 0 {
 			config.CookieTimeOut = opt.CookieTimeOut
 		}
-		if opt.SyncInterval > 0 {
-			config.SyncInterval = opt.SyncInterval
+		if opt.ValidateTimeOut > 0 {
+			config.ValidateTimeOut = opt.ValidateTimeOut
 		}
 		if len(opt.CookieKeyPairs) == 4 {
 			config.CookieKeyPairs = opt.CookieKeyPairs
@@ -221,73 +201,99 @@ func Configure(record interface{}, dbImpl DB, validateFunc ValidateCookie, optio
 		if !opt.CookieTimeStamp.IsZero() {
 			config.CookieTimeStamp = opt.CookieTimeStamp
 		}
-		if len(opt.FormTokenKeyPairs) == 4 {
-			config.FormTokenKeyPairs = opt.FormTokenKeyPairs
-		}
-		if !opt.FormTokenTimeStamp.IsZero() {
-			config.FormTokenTimeStamp = opt.FormTokenTimeStamp
+		if opt.FormTokenKeys != nil {
+			config.FormTokenKeys = opt.FormTokenKeys
 		}
 	}
 	db = dbImpl
+	validate = validateFunc
 	setKeys()
 	go func() {
+		syncFormToken()
+		time.Sleep(config.FormTokenKeys.TimeOut / 2)
 		for {
-			sync()
-			time.Sleep(config.SyncInterval)
+			syncFormToken()
+			time.Sleep(config.FormTokenKeys.TimeOut)
 		}
 	}()
-	validate = validateFunc
 }
 
-func sync() {
+type Keys struct {
+	KeyPairs [][]byte
+	Start time.Time
+	TimeOut time.Duration
+	codecs []securecookie.Codec
+}
+
+func (k *Keys) Stale() bool {
+	return time.Since(k.Start) >= k.TimeOut
+}
+
+func (k *Keys) Rotate() (ret *Keys) {
+	ret = &Keys {
+		KeyPairs: [][]byte{
+			k.KeyPairs[4],
+			k.KeyPairs[5],
+			k.KeyPairs[0],
+			k.KeyPairs[1],
+			securecookie.GenerateRandomKey(authKeyLen),
+			securecookie.GenerateRandomKey(encrKeyLen),
+		},
+		TimeOut: k.TimeOut,
+		Start: time.Now(),
+	}
+	return ret
+}
+
+func (k *Keys) Codecs() []securecookie.Codec {
+	if len(k.codecs) == 0 {
+		k.codecs = securecookie.CodecsFromPairs(k.KeyPairs...)
+	}
+	return k.codecs
+}
+
+func (k *Keys) Encode(name string, value interface{}) (s string) {
+	if k.Stale() {
+		*k = *k.Rotate()
+		go syncFormToken()
+	}
+	var err error
+	if s, err = securecookie.EncodeMulti(name, value, k.Codecs()...); err != nil {
+		log.Panicln("ERROR: encoding form token failed", err)
+	}
+	return
+}
+
+func (k *Keys) Decode(name string, value string, dst interface{}) error {
+	return securecookie.DecodeMulti(name, value, dst, k.Codecs()...)
+}
+
+func syncFormToken() {
 	dbConfig := new(Config)
 	if err := db.Fetch(dbConfig); err != nil {
 		// Upload current (default) config to DB if there wasn't any
 		db.Upsert(config)
 	} else {
-		for i := 1; dbConfig.Locked; i++ {
-			log.Printf("DEBUG: secure config locked %d", i)
-			time.Sleep(50 * time.Millisecond)
-			db.Fetch(dbConfig)
-		}
 		// Replace current config with the one from DB
 		config = dbConfig
-		// Rotate keys if timed out
-		if time.Now().Sub(config.CookieTimeStamp) > config.CookieTimeOut {
-			config.lock()
-			rotateConfig := new(Config)
-			*rotateConfig = *config
-			rotateConfig.CookieKeyPairs = [][]byte{
-				securecookie.GenerateRandomKey(authKeyLen),
-				securecookie.GenerateRandomKey(encrKeyLen),
-				config.CookieKeyPairs[0],
-				config.CookieKeyPairs[1],
-			}
-			rotateConfig.CookieTimeStamp = time.Now()
-			if err := db.Upsert(rotateConfig); err == nil {
-				config = rotateConfig
-				config.unlock()
-				log.Println("INFO: Security keys rotated")
-			}
-		}
 		// Rotate FormToken keys if timed out
-		if time.Now().Sub(config.FormTokenTimeStamp) > config.SyncInterval {
-			config.lock()
+		if config.FormTokenKeys.Stale() {
 			rotateConfig := new(Config)
 			*rotateConfig = *config
-			rotateConfig.FormTokenKeyPairs = [][]byte{
-				securecookie.GenerateRandomKey(authKeyLen),
-				securecookie.GenerateRandomKey(encrKeyLen),
-				config.FormTokenKeyPairs[0],
-				config.FormTokenKeyPairs[1],
-			}
-			rotateConfig.FormTokenTimeStamp = time.Now()
+			rotateConfig.FormTokenKeys = config.FormTokenKeys.Rotate()
 			if err := db.Upsert(rotateConfig); err == nil {
 				config = rotateConfig
-				config.unlock()
 				log.Println("INFO: FormToken keys rotated")
 			}
 		}
-		setKeys()
+	}
+}
+
+func setKeys() {
+	store = sessions.NewCookieStore(config.CookieKeyPairs...)
+	store.Options = &sessions.Options{
+		MaxAge: int(config.CookieTimeOut / time.Second),
+		Secure: true,
+		Path:   "/",
 	}
 }
