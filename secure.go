@@ -197,7 +197,7 @@ var (
 			},
 		},
 	}
-	tokenKeys *Token
+	tokenKeys   *Token
 	sessionKeys *Session
 )
 
